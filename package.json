@@ -12,7 +12,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.79.10",
+    "@earendil-works/pi-ai": "^0.81.1",
     "yaml": "^2.9.0"
   }
 }
