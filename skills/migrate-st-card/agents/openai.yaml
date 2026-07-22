@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate ST Card"
+  short_description: "Turn ST cards into RP worlds"
+  default_prompt: "Use $migrate-st-card to migrate this SillyTavern character card into this RP agent project."

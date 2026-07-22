@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build RP Agent"
+  short_description: "Design project-native RP agents"
+  default_prompt: "Use $build-rp-agent to design a new world pack and configure this RP agent project."

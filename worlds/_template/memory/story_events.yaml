@@ -1,0 +1,35 @@
+# OpenViking 记忆 schema（story_events）—— OV 0.4.x 形状。
+memory_type: story_events
+description: |
+  成功正文回合产生的故事事件长期记忆。只记录故事世界内已经发生、
+  被确认或被揭示的事件。每个成功正文回合至少创建一条 story_events。
+directory: "viking://user/{{ user_space }}/memories/story_events"
+filename_template: "{{ event_name }}.md"
+operation_mode: add_only
+enabled: true
+content_template: |-
+  Summary: {{ summary }}
+
+  Source: {{ source }}
+embedding_template: |-
+  {{ event_name }}
+
+  {{ summary }}
+overview_template: |-
+  # Story Events Overview
+  {% for item in items %}
+  - [{{ item.file_content.summary|default(item.file_name, true) }}](./{{ item.file_name }})
+  {% endfor %}
+fields:
+  - name: event_name
+    type: string
+    description: 简短事件名，同一 save 内稳定唯一，优先组合角色、地点、动作。
+    merge_op: immutable
+  - name: summary
+    type: string
+    description: 事件摘要，聚焦已经发生、被确认或被揭示的事实。
+  - name: source
+    type: string
+    description: 固定填写 assistant。
+    init_value: assistant
+    merge_op: immutable

@@ -1,0 +1,6 @@
+- id: location.example-square
+  name: 示例广场
+  summary: 一个示例地点条目。
+  aliases: []
+  tags: [示例]
+  visibility: public

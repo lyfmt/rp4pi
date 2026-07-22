@@ -1,0 +1,10 @@
+- id: location.border-relay
+  name: 北门驿站
+  aliases: [边境驿站, 驿站大厅]
+  summary: 山道与旧商路交界处的边境驿站，清晨雾气很重。
+  body: 北门驿站是边军、商旅和驿传信使都会经过的中转点。大厅有木椅、长桌和可供短暂停留的火盆，门外连着旧商路与北门山道。
+  tags: [地点, 驿站, 边境, 商路]
+  visibility: public
+  fields:
+    region: 北门边境
+    function: 驿传与商旅中转

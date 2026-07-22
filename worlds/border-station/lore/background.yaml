@@ -1,0 +1,18 @@
+- id: background.undelivered-letter
+  name: 未送达密信
+  aliases: [密信, 火漆密信]
+  summary: 韩越带到北门驿站的密信，火漆完整，收信人尚未公开。
+  body: 这封密信是当前开场冲突的核心物件。它不属于玩家的旧经历，也不是可随意改写的临场道具；GM 需要保持其火漆完整、收信人未明的初始设定，直到剧情中有明确裁定。
+  tags: [背景, 密信, 火漆, 任务]
+  visibility: gm
+  fields:
+    sealed: true
+    initial_holder: character.han-yue
+  relations:
+    - { type: carried_by, target: character.han-yue }
+- id: background.border-tension
+  name: 北门边境紧张局势
+  aliases: [边境局势, 北门局势]
+  summary: 北门一带近来盘查加严，驿传线路变得不安稳。
+  tags: [背景, 边境, 盘查]
+  visibility: public

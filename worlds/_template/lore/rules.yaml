@@ -1,0 +1,6 @@
+- id: rule.fixed-lore
+  name: 固定资料示例规则
+  summary: 固定资料描述世界权威设定，不记录存档经历。
+  aliases: []
+  tags: [示例]
+  visibility: public

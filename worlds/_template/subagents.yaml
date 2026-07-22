@@ -1,0 +1,27 @@
+# 子代理：GM 可委派的独立子进程，跑在自己的工具白名单里（最小权限）。
+# 分两类，kind 区分（缺省 tool）。默认留空。
+# 启用下面任一示例时，先删除这行 []，再取消注释对应条目。
+# 完整说明见 skills/development-guide/references/world-pack.md 的「Subagents」。
+[]
+# ── 角色型（role）：长期扮演单一角色，保留自己的行动轨迹 ──
+# - name: my-actor
+#   kind: role
+#   description: 扮演某某角色；保留其历次言行以保持连续一致。
+#   prompt: ./subagents/my-actor/agent.md
+#
+# ── 工具型（tool）：用完即弃。启用前需创建对应 agent.md / index.ts ──
+# - name: my-tool-agent
+#   kind: tool
+#   description: 一句话职责，供 GM 挑选委派。
+#   tools: [ some_tool ]
+#   prompt: ./subagents/my-tool-agent/agent.md
+#   extension: ./subagents/my-tool-agent/index.ts
+#
+# ── GM 游玩中动态生成新可扮演角色（forge_role）。
+#    启用前需创建 role-forger/agent.md，并在 index.ts 中 re-export 底座 forge-role 工具。──
+# - name: role-forger
+#   kind: tool
+#   description: 依据线索铸造一个可长期扮演的新具名角色，登记为 role 并落 characters 记忆。
+#   tools: [ forge_role ]
+#   prompt: ./subagents/role-forger/agent.md
+#   extension: ./subagents/role-forger/index.ts

@@ -1,0 +1,41 @@
+memory_type: characters
+description: |
+  角色长期记忆。只记录明确出现或被提到的具名角色。
+  当成功 RP 正文回合中出现具名角色、角色身份、关系、状态、
+  持有物或承诺时，至少创建或更新一条 characters 记忆。
+  例如“林澈是旧钟楼守夜人并把北门银钥匙托付给玩家”应写入 characters。
+  不要为“守卫”“村民”“敌人”等无名群体创建记忆。
+directory: "viking://user/{{ user_space }}/memories/characters"
+filename_template: "{{ name }}.md"
+operation_mode: upsert
+enabled: true
+embedding_template: |-
+  {{ name }}
+
+  {{ summary }}
+
+  {{ last_seen }}
+overview_template: |-
+  # Characters Overview
+  {% for item in items %}
+  - [{{ item.file_content.name|default(item.file_name, true) }}](./{{ item.file_name }})
+  {% endfor %}
+fields:
+  - name: name
+    type: string
+    description: |
+      角色姓名或称呼。单角色单文件，只提取明确出现或被提到的具名角色。
+      不创建模糊群体。
+    merge_op: immutable
+
+  - name: summary
+    type: string
+    description: |
+      稳定身份、关系、持有物、承诺和已知状态摘要。保留可供后续剧情查询的事实，
+      不存大段原文摘录。
+    merge_op: patch
+
+  - name: last_seen
+    type: string
+    description: 最近一次明确出现或被提到的情境。
+    merge_op: replace

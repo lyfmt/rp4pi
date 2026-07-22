@@ -1,0 +1,13 @@
+- id: character.han-yue
+  name: 韩越
+  aliases: [受伤信使, 边关信使]
+  summary: 携带未送达密信抵达北门驿站的受伤信使。
+  body: 韩越为边军驿传线上的信使，清晨带着火漆完整的密信闯入驿站。他失血未止但仍保持清醒，把送达密信视为第一要务。除非玩家取得他的信任，他不会主动透露密信收信人。
+  tags: [信使, 受伤, 密信, 边军]
+  visibility: public
+  fields:
+    role: 信使
+    condition: 失血但清醒
+  relations:
+    - { type: carries, target: background.undelivered-letter }
+    - { type: located_at, target: location.border-relay }

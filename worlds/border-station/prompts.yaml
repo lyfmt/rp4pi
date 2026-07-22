@@ -1,0 +1,5 @@
+# 这个世界的 GM 人设。多个文件按顺序拼接后作为 GM system prompt。
+gm:
+  - ./prompts/gm-core.md
+  - ./prompts/gm-tools.md
+  - ./prompts/gm-output.md

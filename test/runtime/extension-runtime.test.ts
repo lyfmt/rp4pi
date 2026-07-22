@@ -1,0 +1,705 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { pathToFileURL } from "node:url";
+
+import { activateAllExtensions, activateOvMemory, resetShared } from "../helpers/extensions.ts";
+import { formatPacketForWriter } from "../../src/runtime/writer-history.ts";
+import { parseStorySnapshotEnvelope } from "../../src/state/snapshot-envelope.ts";
+import { latestStorySnapshotTurnNo } from "../../src/state/snapshots.ts";
+const sqlite = await import(pathToFileURL(new URL("../../src/state/sqlite.ts", import.meta.url).pathname).href);
+
+const openRpDatabase = sqlite.openRpDatabase as typeof import("../../src/state/sqlite.js").openRpDatabase;
+type OpenVikingClient = import("../../src/ov/client.js").OpenVikingClient;
+type ToolResultEntry = { name: string; execute: (...args: unknown[]) => unknown };
+type RegisteredCommand = { name: string; description?: string; handler: (args: string, ctx: any) => Promise<void> | void };
+
+function sessionCtx(sessionId: string, getEntries?: () => unknown[]): unknown {
+  const sessionManager: { getSessionId(): string; getEntries?(): unknown[] } = { getSessionId: () => sessionId };
+  if (getEntries) sessionManager.getEntries = getEntries;
+  return {
+    sessionManager,
+    isIdle: () => true,
+    modelRegistry: {
+      find(provider: string, modelId: string) {
+        return { provider, id: modelId, api: "test" };
+      },
+      async getApiKeyAndHeaders() {
+        return { ok: true, apiKey: "test-key" };
+      }
+    }
+  };
+}
+
+// A session transcript ending in a submitted (but unrendered) direction packet,
+// the shape createAgentEndHandler reads via findPendingDirectionPacket.
+function entriesWithSubmittedPacket(packet: unknown, playerInput: string): unknown[] {
+  return [
+    { type: "message", message: { role: "user", content: playerInput } },
+    {
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolName: "submit_direction_packet",
+        toolCallId: "call-submit",
+        details: { packet }
+      }
+    }
+  ];
+}
+
+async function awaitStoryCompletion(completion: Promise<void> | undefined): Promise<void> {
+  assert.ok(completion);
+  await completion;
+}
+
+test("extension keeps commit_turn in the GM loop and reserves termination for presentation handoff", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "rp-extension-commit-turn-"));
+  const previousWorld = process.env.RP_WORLD;
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  const previousOvDisable = process.env.RP_DISABLE_OPENVIKING;
+  const tools: ToolResultEntry[] = [];
+
+  try {
+    process.env.RP_WORLD = "border-station";
+    process.env.RP_SQLITE_PATH = join(directory, "state.sqlite");
+    process.env.RP_DISABLE_OPENVIKING = "1";
+    activateAllExtensions({
+      on() {},
+      registerTool(tool) {
+        tools.push(tool as ToolResultEntry);
+      },
+      registerCommand() {},
+      sendMessage() {}
+    });
+
+    const initialize = tools.find((tool) => tool.name === "initialize_new_game");
+    const commitTurn = tools.find((tool) => tool.name === "commit_turn");
+    const submitDirection = tools.find(
+      (tool) => tool.name === "submit_direction_packet"
+    );
+    assert.ok(initialize);
+    assert.ok(commitTurn);
+    assert.ok(submitDirection);
+    const context = sessionCtx("session-system");
+    initialize.execute("call-init", {}, undefined, undefined, context);
+
+    const first = await commitTurn.execute(
+      "call-commit-1",
+      {
+        operations: [
+          {
+            system: "relay-blueprints",
+            command: "create",
+            input: { id: "relay-alpha", parts: ["core"], stability: 0.8 }
+          }
+        ]
+      },
+      undefined,
+      undefined,
+      context
+    ) as { terminate?: boolean; details: Record<string, unknown> };
+    const second = await commitTurn.execute(
+      "call-commit-2",
+      {
+        operations: [
+          {
+            system: "relay-blueprints",
+            command: "create",
+            input: { id: "relay-beta", parts: ["antenna"], stability: 0.7 }
+          }
+        ]
+      },
+      undefined,
+      undefined,
+      context
+    ) as { terminate?: boolean; details: Record<string, unknown> };
+    const submitted = submitDirection.execute(
+      "call-submit",
+      {
+        storyElements: {
+          currentSituation: "The relay is quiet.",
+          playerIntent: "Continue.",
+          visibleChanges: [],
+          presentCharacters: ["player"],
+          characterActions: [],
+          tension: "The road remains uncertain."
+        },
+        needsRender: true,
+        directReply: ""
+      },
+      undefined,
+      undefined,
+      context
+    ) as { terminate?: boolean };
+
+    assert.equal(first.terminate, undefined);
+    assert.equal(first.details.revision, 1);
+    assert.equal(second.terminate, undefined);
+    assert.equal(second.details.revision, 2);
+    assert.equal(submitted.terminate, true);
+  } finally {
+    resetShared();
+    if (previousWorld === undefined) delete process.env.RP_WORLD;
+    else process.env.RP_WORLD = previousWorld;
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    if (previousOvDisable === undefined) delete process.env.RP_DISABLE_OPENVIKING;
+    else process.env.RP_DISABLE_OPENVIKING = previousOvDisable;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("extension agent_end hook commits submitted direction packets through the writer", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+  const sentMessages: Array<{ customType: string; content: string; options?: { triggerTurn?: boolean } }> = [];
+  const writerInputs: unknown[] = [];
+  const ovCalls: string[] = [];
+  const tools: ToolResultEntry[] = [];
+  let storyCompletion: Promise<void> | undefined;
+
+  try {
+    activateAllExtensions(
+      {
+        on(name, handler) {
+          hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+        },
+        registerTool(tool) {
+          tools.push(tool as ToolResultEntry);
+        },
+        registerCommand() {},
+        sendMessage(message, options) {
+          sentMessages.push({ customType: message.customType, content: (message as { content: string }).content, options });
+        }
+      },
+      {
+        observeCompletion(completion) {
+          storyCompletion = completion;
+        },
+        createWriterClient: () => ({
+          async render(messages) {
+            writerInputs.push(messages);
+            return "Rendered by fake writer.";
+          }
+        })
+      }
+    );
+
+    const init = tools.find((tool) => tool.name === "initialize_new_game");
+    assert.ok(init);
+    const initResult = init.execute("c1", { playerName: "Ari", scene: "Start" }, undefined, undefined, sessionCtx("session-x")) as {
+      details?: { saveId?: string };
+    };
+    const saveId = initResult.details?.saveId;
+    assert.ok(saveId);
+
+    const submitDirection = tools.find((tool) => tool.name === "submit_direction_packet");
+    assert.ok(submitDirection);
+    const packet = {
+      storyElements: {
+        currentSituation: "A courier is at the relay station.",
+        playerIntent: "The player helps the courier.",
+        visibleChanges: ["The courier arrives."],
+        presentCharacters: ["player", "courier"],
+        tension: "The road ahead is still unsafe."
+      },
+      needsRender: true,
+      directReply: ""
+    };
+
+    const agentEnd = hooks.get("agent_end");
+    assert.ok(agentEnd);
+    await agentEnd(
+      {},
+      sessionCtx("session-x", () => entriesWithSubmittedPacket(packet, "I help the courier."))
+    );
+    await awaitStoryCompletion(storyCompletion);
+
+    // writer rendered via configured model and prose delivered via sendMessage
+    assert.equal(sentMessages[0]?.customType, "writer-prose");
+    assert.equal(sentMessages[0]?.content, "Rendered by fake writer.");
+    assert.deepEqual(sentMessages[0]?.options, { triggerTurn: false });
+    assert.equal(writerInputs.length, 1);
+    const writerInput = writerInputs[0] as Parameters<import("../../src/runtime/writer-client.js").WriterClient["render"]>[0];
+    const writerText = formatPacketForWriter(writerInput.packet);
+    assert.match(writerText, /# Story Elements/);
+    assert.match(writerText, /Current situation: A courier is at the relay station\./);
+    assert.doesNotMatch(writerText, /^Start:/m);
+    const db = openRpDatabase(sqlitePath);
+    try {
+      assert.equal(latestStorySnapshotTurnNo(db, saveId), 1);
+    } finally {
+      db.close();
+    }
+    void writerInputs;
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension streams writer, commit, and hook progress into the current UI context", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-progress-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  const previousOvDisable = process.env.RP_DISABLE_OPENVIKING;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+  process.env.RP_DISABLE_OPENVIKING = "1";
+
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+  const tools: ToolResultEntry[] = [];
+  const workingMessages: string[] = [];
+  let storyCompletion: Promise<void> | undefined;
+
+  try {
+    activateAllExtensions(
+      {
+        on(name, handler) {
+          hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+        },
+        registerTool(tool) {
+          tools.push(tool as ToolResultEntry);
+        },
+        registerCommand() {},
+        sendMessage() {}
+      },
+      {
+        observeCompletion(completion) {
+          storyCompletion = completion;
+        },
+        createWriterClient: () => ({
+          async render(input: any) {
+            input.progress?.({ type: "stage_start", stage: "draft" });
+            input.progress?.({ type: "stage_end", stage: "draft", output: "Draft done." });
+            return "Rendered with live progress.";
+          }
+        })
+      }
+    );
+
+    const initialize = tools.find((tool) => tool.name === "initialize_new_game");
+    const agentEnd = hooks.get("agent_end");
+    assert.ok(initialize);
+    assert.ok(agentEnd);
+    initialize.execute("c1", { scene: "Start" }, undefined, undefined, sessionCtx("session-progress"));
+
+    const packet = {
+      storyElements: {
+        currentSituation: "Progress scene.",
+        playerIntent: "Continue.",
+        visibleChanges: ["Progress changes."],
+        presentCharacters: ["player"],
+        tension: "Progress tension."
+      },
+      needsRender: true,
+      directReply: ""
+    };
+    const ctx = sessionCtx("session-progress", () => entriesWithSubmittedPacket(packet, "Continue.")) as any;
+    ctx.hasUI = true;
+    ctx.mode = "tui";
+    ctx.ui = {
+      select: async () => undefined,
+      confirm: async () => true,
+      input: async () => undefined,
+      notify() {},
+      setWorkingMessage(message?: string) {
+        workingMessages.push(message ?? "");
+      }
+    };
+
+    await agentEnd({}, ctx);
+    await awaitStoryCompletion(storyCompletion);
+
+    const visibleProgress = workingMessages.join("\n");
+    assert.match(visibleProgress, /draft/);
+    assert.match(visibleProgress, /commit/);
+    assert.match(visibleProgress, /hook/);
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    if (previousOvDisable === undefined) delete process.env.RP_DISABLE_OPENVIKING;
+    else process.env.RP_DISABLE_OPENVIKING = previousOvDisable;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension surfaces OpenViking append failures as memory error messages", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-ov-error-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  const previousFetch = globalThis.fetch;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+  globalThis.fetch = (async () => {
+    throw new Error("OV refused connection");
+  }) as typeof fetch;
+
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+  const sentMessages: Array<{
+    customType: string;
+    content: string;
+    details?: Record<string, unknown>;
+    options?: { triggerTurn?: boolean };
+  }> = [];
+  const tools: ToolResultEntry[] = [];
+  const workingMessages: string[] = [];
+  let storyCompletion: Promise<void> | undefined;
+
+  try {
+    activateAllExtensions(
+      {
+        on(name, handler) {
+          hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+        },
+        registerTool(tool) {
+          tools.push(tool as ToolResultEntry);
+        },
+        registerCommand() {},
+        sendMessage(message, options) {
+          sentMessages.push({
+            customType: message.customType,
+            content: message.content,
+            details: message.details,
+            options
+          });
+        }
+      },
+      {
+        observeCompletion(completion) {
+          storyCompletion = completion;
+        },
+        createWriterClient: () => ({
+          async render() {
+            return "Rendered by fake writer.";
+          }
+        })
+      }
+    );
+
+    const init = tools.find((tool) => tool.name === "initialize_new_game");
+    const submitDirection = tools.find((tool) => tool.name === "submit_direction_packet");
+    const agentEnd = hooks.get("agent_end");
+    assert.ok(init);
+    assert.ok(submitDirection);
+    assert.ok(agentEnd);
+
+    init.execute("c1", { scene: "Start" }, undefined, undefined, sessionCtx("session-ov-error"));
+    const packet = {
+      storyElements: {
+        currentSituation: "A courier is at the relay station.",
+        playerIntent: "The player helps the courier.",
+        visibleChanges: ["The courier arrives."],
+        presentCharacters: ["player", "courier"],
+        tension: "The road ahead is still unsafe."
+      },
+      needsRender: true,
+      directReply: ""
+    };
+
+    const ctx = sessionCtx("session-ov-error", () => entriesWithSubmittedPacket(packet, "I help the courier.")) as any;
+    ctx.hasUI = true;
+    ctx.mode = "tui";
+    ctx.ui = {
+      select: async () => undefined,
+      confirm: async () => true,
+      input: async () => undefined,
+      notify() {},
+      setWorkingMessage(message?: string) {
+        workingMessages.push(message ?? "");
+      }
+    };
+
+    await agentEnd({}, ctx);
+    await awaitStoryCompletion(storyCompletion);
+
+    assert.equal(sentMessages[0]?.customType, "writer-prose");
+    assert.deepEqual(sentMessages[0]?.options, { triggerTurn: false });
+    assert.equal(sentMessages[1]?.customType, "openviking-memory-error");
+    assert.equal(sentMessages[1]?.content, "OpenViking memory append failed: OV refused connection");
+    assert.equal(sentMessages[1]?.details?.kind, "openviking-memory-error");
+    assert.deepEqual(sentMessages[1]?.options, { triggerTurn: false });
+    assert.match(workingMessages.join("\n"), /openviking/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension registers a styled renderer for OpenViking memory errors", () => {
+  let rendered: unknown;
+  let rendererType: string | undefined;
+
+  resetShared();
+  activateOvMemory({
+    on() {},
+    registerTool() {},
+    registerCommand() {},
+    registerMessageRenderer(customType, renderer) {
+      if (customType === "openviking-memory-error") {
+        rendererType = customType;
+        rendered = renderer(
+          {
+            content: "OpenViking memory append failed: OV refused connection",
+            details: {
+              saveId: "save-1",
+              error: "OV refused connection"
+            }
+          },
+          {}
+        );
+      }
+    },
+    sendMessage() {}
+  });
+
+  assert.equal(rendererType, "openviking-memory-error");
+  assert.equal(typeof (rendered as { render?: unknown })?.render, "function");
+  assert.deepEqual((rendered as { render(width: number): string[] }).render(80), [
+    "⚠ OpenViking memory append failed",
+    "save: save-1",
+    "reason: OV refused connection"
+  ]);
+});
+
+test("extension registers memory lookup tools from default OpenViking config", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-no-ov-"));
+  const previousUrl = process.env.OPENVIKING_URL;
+  const previousKey = process.env.OPENVIKING_API_KEY;
+  const previousAccount = process.env.OPENVIKING_ACCOUNT;
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  process.env.RP_SQLITE_PATH = join(dir, "state.sqlite");
+  delete process.env.OPENVIKING_URL;
+  delete process.env.OPENVIKING_API_KEY;
+  delete process.env.OPENVIKING_ACCOUNT;
+
+  const tools: ToolResultEntry[] = [];
+  try {
+    activateAllExtensions({
+      on() {},
+      registerTool(tool) {
+        tools.push(tool as ToolResultEntry);
+      },
+      registerCommand() {},
+      sendMessage() {}
+    });
+
+    assert.equal(tools.some((tool) => tool.name === "search_memory"), true);
+    assert.equal(tools.some((tool) => tool.name === "read_memory"), true);
+    assert.equal(tools.some((tool) => tool.name === "initialize_new_game"), true);
+  } finally {
+    if (previousUrl === undefined) delete process.env.OPENVIKING_URL;
+    else process.env.OPENVIKING_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.OPENVIKING_API_KEY;
+    else process.env.OPENVIKING_API_KEY = previousKey;
+    if (previousAccount === undefined) delete process.env.OPENVIKING_ACCOUNT;
+    else process.env.OPENVIKING_ACCOUNT = previousAccount;
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension tools bind initialized saves to the session for later status reads", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-session-bind-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+
+  const tools: ToolResultEntry[] = [];
+  const commands: RegisteredCommand[] = [];
+  const notices: string[] = [];
+
+  try {
+    activateAllExtensions({
+      on() {},
+      registerTool(tool) {
+        tools.push(tool as ToolResultEntry);
+      },
+      registerCommand(name, options) {
+        commands.push({ name, description: options.description, handler: options.handler });
+      },
+      sendMessage() {}
+    });
+
+    const initialize = tools.find((tool) => tool.name === "initialize_new_game");
+    const statusCommand = commands.find((command) => command.name === "status");
+    assert.ok(initialize);
+    assert.ok(statusCommand);
+
+    initialize.execute("c1", { playerName: "Ari", location: "Harbor Gate" }, undefined, undefined, sessionCtx("session-a"));
+    await statusCommand.handler("", { sessionManager: { getSessionId: () => "session-a" }, ui: { notify: (m: string) => notices.push(m) } });
+
+    assert.ok(notices.some((message) => /玩家：Ari/.test(message)), `notices: ${notices.join("|")}`);
+    assert.ok(notices.some((message) => /地点：Harbor Gate/.test(message)));
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension promotes a bound legacy baseline before the agent starts", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-snapshot-promotion-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+  const tools: ToolResultEntry[] = [];
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+
+  try {
+    activateAllExtensions({
+      on(name, handler) {
+        hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+      },
+      registerTool(tool) {
+        tools.push(tool as ToolResultEntry);
+      },
+      registerCommand() {},
+      sendMessage() {}
+    });
+    const initialize = tools.find((tool) => tool.name === "initialize_new_game");
+    const beforeAgentStart = hooks.get("before_agent_start");
+    assert.ok(initialize);
+    assert.ok(beforeAgentStart);
+    const saveId = (initialize.execute(
+      "c1",
+      { playerName: "Ari", scene: "current state" },
+      undefined,
+      undefined,
+      sessionCtx("session-a")
+    ) as { details?: { saveId?: string } }).details?.saveId;
+    assert.ok(saveId);
+
+    const db = openRpDatabase(sqlitePath);
+    try {
+      const current = db
+        .prepare("SELECT state_json FROM latest_states WHERE save_id = ?")
+        .get(saveId) as { state_json: string };
+      db.prepare(
+        "INSERT INTO turn_snapshots (save_id, turn_no, state_json, created_at) VALUES (?, ?, ?, ?)"
+      ).run(saveId, 5, current.state_json, "t5");
+    } finally {
+      db.close();
+    }
+
+    await beforeAgentStart({}, sessionCtx("session-a"));
+
+    const readDb = openRpDatabase(sqlitePath);
+    try {
+      const row = readDb
+        .prepare("SELECT state_json FROM turn_snapshots WHERE save_id = ? AND turn_no = 5")
+        .get(saveId) as { state_json: string };
+      assert.equal(
+        parseStorySnapshotEnvelope(JSON.parse(row.state_json)).core.payload.scene.summary,
+        "current state"
+      );
+    } finally {
+      readDb.close();
+    }
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("extension agent_end hook isolates commits per session", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-hook-session-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+
+  const tools: ToolResultEntry[] = [];
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+  let storyCompletion: Promise<void> | undefined;
+
+  try {
+    activateAllExtensions(
+      {
+        on(name, handler) {
+          hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+        },
+        registerTool(tool) {
+          tools.push(tool as ToolResultEntry);
+        },
+        registerCommand() {},
+        sendMessage() {}
+      },
+      {
+        observeCompletion(completion) {
+          storyCompletion = completion;
+        },
+        createWriterClient: () => ({
+          async render() {
+            return "Rendered for session isolation.";
+          }
+        })
+      }
+    );
+
+    const initialize = tools.find((tool) => tool.name === "initialize_new_game");
+    const updateScene = tools.find((tool) => tool.name === "update_scene");
+    const agentEnd = hooks.get("agent_end");
+    assert.ok(initialize);
+    assert.ok(updateScene);
+    assert.ok(agentEnd);
+
+    const saveA = (initialize.execute("c1", { scene: "Scene A" }, undefined, undefined, sessionCtx("session-a")) as {
+      details?: { saveId?: string };
+    }).details?.saveId;
+    const saveB = (initialize.execute("c2", { scene: "Scene B" }, undefined, undefined, sessionCtx("session-b")) as {
+      details?: { saveId?: string };
+    }).details?.saveId;
+    assert.ok(saveA);
+    assert.ok(saveB);
+
+    updateScene.execute("c3", { summary: "Committed scene A" }, undefined, undefined, sessionCtx("session-a"));
+
+    const submitDirection = tools.find((tool) => tool.name === "submit_direction_packet");
+    assert.ok(submitDirection);
+    const packet = {
+      storyElements: {
+        currentSituation: "Scene A is active.",
+        playerIntent: "A input",
+        visibleChanges: ["Committed scene A"],
+        presentCharacters: ["player"],
+        tension: "Session A continues."
+      },
+      needsRender: true,
+      directReply: ""
+    };
+
+    await agentEnd(
+      {},
+      sessionCtx("session-a", () => entriesWithSubmittedPacket(packet, "A input"))
+    );
+    await awaitStoryCompletion(storyCompletion);
+
+    // committing session-a must not touch session-b's save
+    updateScene.execute("c5", { summary: "Committed scene B" }, undefined, undefined, sessionCtx("session-b"));
+
+    const db = openRpDatabase(sqlitePath);
+    try {
+      const snapshotA = db.prepare("SELECT state_json FROM turn_snapshots WHERE save_id = ?").get(saveA) as { state_json: string } | undefined;
+      const snapshotB = db.prepare("SELECT state_json FROM turn_snapshots WHERE save_id = ?").get(saveB) as { state_json: string } | undefined;
+      assert.ok(snapshotA);
+      assert.equal(JSON.parse(snapshotA.state_json).core.payload.scene.summary, "Committed scene A");
+      assert.equal(snapshotB, undefined);
+    } finally {
+      db.close();
+    }
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

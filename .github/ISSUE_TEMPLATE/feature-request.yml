@@ -1,0 +1,28 @@
+name: 功能建议
+description: 提议新的运行时、世界包或开发体验能力
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: 使用场景
+      description: 说明当前工作流中的具体限制，而不是只描述期望实现。
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: 建议方案
+      description: 说明期望的接口、行为和最小验收条件。
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: 替代方案
+      description: 列出已经尝试过的配置或实现方式。
+
+  - type: textarea
+    attributes:
+      label: 兼容性影响
+      description: 是否影响现有世界包、存档、System state 或 Pi 配置。

@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 世界包模板 —— 复制整个 worlds/_template/ 目录到 worlds/<你的世界名>/ 即可开始。
+#
+#   cp -r worlds/_template worlds/my-world
+#   # 编辑 my-world/ 里的内容，然后：
+#   RP_WORLD=my-world ./start.sh
+#
+# 以 `_` 开头的目录（如本模板）不会被自动选择，也不能直接运行。
+# 完整字段说明见 skills/development-guide/references/world-pack.md。
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: _template
+display_name: 空白世界模板
+description: 复制我，做你自己的世界。
+
+state: ./state.yaml
+prompts: ./prompts.yaml
+# prompt_template 可选；需要自定义 GM/writer 消息链时，创建文件后取消下一行注释。
+# prompt_template: ./prompt-template.yaml
+memory: ./memory.yaml
+lore: ./lore.yaml
+tools: ./tools.yaml
+# 可选：创建 systems/my-system.ts 后再取消注释；模板不默认启用具体 System module。
+# System module 不是 Pi tool，不要把同一路径放进 tools.extra。
+# systems:
+#   - ./systems/my-system.ts
+subagents: ./subagents.yaml
+hooks: ./hooks.yaml
+writing: ./writing.yaml
+revision: ./revision.yaml

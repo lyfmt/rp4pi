@@ -1,0 +1,4 @@
+interface:
+  display_name: "Development Guide"
+  short_description: "Project-specific developer guidance"
+  default_prompt: "Use this skill when changing or debugging this project."

@@ -1,0 +1,3 @@
+# 未声明 prompt_template.gm 时必填。GM system prompt，按顺序拼接。至少一个文件。
+gm:
+  - ./prompts/gm.md

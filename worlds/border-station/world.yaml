@@ -1,0 +1,17 @@
+# 世界包 manifest。只保留世界元信息和模块入口，具体配置在同目录 YAML 中。
+name: border-station
+display_name: 边境驿站
+description: 玩家在边境驿站醒来，身边有一名受伤信使与一封未送达的密信。
+
+state: ./state.yaml
+prompts: ./prompts.yaml
+memory: ./memory.yaml
+lore: ./lore.yaml
+tools: ./tools.yaml
+subagents: ./subagents.yaml
+writing: ./writing.yaml
+revision: ./revision.yaml
+hooks: ./hooks.yaml
+
+systems:
+  - ./systems/relay-blueprints.ts

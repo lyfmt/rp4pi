@@ -1,0 +1,20 @@
+# 长期记忆对齐 OpenViking。连接配置（url/apiKey/account）不进世界包，
+# 留在 .pi/agent/settings.json。这里只声明「这个世界要记什么」。
+policy:
+  self:
+    enabled: true
+  peer:
+    enabled: false
+  memory_types:
+    - characters
+    - story_events
+
+# 本世界的 memory schema 文件（OV 服务端读取的 .yaml，保持 OV 0.4.x 形状）。
+schemas:
+  - ./memory/characters.yaml
+  - ./memory/story_events.yaml
+
+# OV 未加载自定义 schema 时的内置类型回退。
+fallback_memory_types:
+  - entities
+  - events

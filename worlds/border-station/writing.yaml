@@ -1,0 +1,7 @@
+# 声明式写作指导目录。正文不预注入，writer 按需读取 path 指向的文件。
+- kind: style
+  description: 叙事语气、感官细节、篇幅节奏与认知迷雾原则。
+  path: ./writing/style.md
+- kind: dialogue
+  description: 有 NPC 开口时的对白质感、潜台词与格式。
+  path: ./writing/dialogue.md

@@ -1,0 +1,23 @@
+# NPC 生成器：GM 需要一个全新的、需长期记住的具名角色时，委派它生成并落库。
+- name: npc-generator
+  kind: tool
+  description: 依据任务文本生成一个具名 NPC，并落进当前存档的 characters 记忆。
+  tools:
+    - forge_character
+  prompt: ./subagents/npc-generator/agent.md
+  extension: ./subagents/npc-generator/index.ts
+
+# 常驻角色 · 受伤信使韩越：kind:role，长期扮演单一角色。
+- name: wounded-messenger
+  kind: role
+  description: 扮演边境驿站里那名受伤信使韩越；保留其历次言行轨迹以保持连续一致。
+  prompt: ./subagents/wounded-messenger/agent.md
+
+# 角色铸造师：游玩中生成新的可长期扮演角色，并落 characters 记忆。
+- name: role-forger
+  kind: tool
+  description: 依据任务文本铸造一个全新的可长期扮演的具名角色，登记为 role 并落 characters 记忆。
+  tools:
+    - forge_role
+  prompt: ./subagents/role-forger/agent.md
+  extension: ./subagents/role-forger/index.ts

@@ -1,0 +1,8 @@
+version: 1
+sources:
+  - path: ./lore/characters.yaml
+    default_kind: character
+  - path: ./lore/locations.yaml
+    default_kind: location
+  - path: ./lore/rules.yaml
+    default_kind: rule

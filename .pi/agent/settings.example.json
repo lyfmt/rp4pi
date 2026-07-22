@@ -1,0 +1,48 @@
+{
+  "theme": "dark",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "deepseek-v4-pro",
+  "writer": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-pro",
+    "thinking": "high"
+  },
+  "writerAgents": {
+    "styleEnhancer": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "thinking": "medium"
+    },
+    "inertiaCritic": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "thinking": "low"
+    },
+    "clicheCritic": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "thinking": "low"
+    }
+  },
+  "rpSubagents": {
+    "npc-generator": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "thinking": "high"
+    },
+    "wounded-messenger": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro"
+    },
+    "role-forger": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "thinking": "high"
+    }
+  },
+  "openViking": {
+    "url": "http://127.0.0.1:1933",
+    "apiKey": "",
+    "account": ""
+  }
+}

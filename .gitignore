@@ -1,0 +1,35 @@
+# Git worktrees and dependencies
+/.worktrees/
+/worktrees/
+/node_modules/
+
+# Build and test output
+/dist/
+/coverage/
+*.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Local Pi authentication, model settings, packages and generated agents
+.pi/agent/*
+!.pi/agent/settings.example.json
+.pi/npm/
+.pi/agents/*.md
+!.pi/agents/writer.md
+
+# Runtime artifacts
+/.pi-subagents/
+/sessions/
+/state/
+/tmp/
+/data/*.sqlite
+/data/*.sqlite-*
+/.playwright-cli/
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/

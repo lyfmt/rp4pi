@@ -1,0 +1,21 @@
+# 开局初值。取代过去散落在 initialize_new_game.ts 和 GM prompt 里的默认值。
+initial:
+  player:
+    name: ""
+    status: 清醒
+    location: 边境驿站大厅
+  time:
+    day: 1
+    hour: 7
+  scene:
+    summary: 清晨雾气未散，你在边境驿站的木椅间醒来，身边有一名受伤信使和一封未送达的密信。
+
+# 本世界自定义的可扩展属性。固定核心（player/time/scene）由底座保证，
+# 这里声明的属性写进 state.attributes，由通用 update_attribute 工具按此 schema 校验。
+attributes:
+  vigor:
+    type: int
+    min: 0
+    max: 100
+    initial: 80
+    description: 玩家体力。剧烈行动、受伤或缺乏休息时下降，休整后回升。

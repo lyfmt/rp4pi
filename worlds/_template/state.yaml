@@ -1,0 +1,22 @@
+# 必填。开局初值。固定核心三段由底座保证存在。
+initial:
+  player:
+    name: ""          # 留空则由玩家/GM 开局填写
+    status: 清醒
+    location: 起始地点
+  time:
+    day: 1
+    hour: 8
+  scene:
+    summary: 用一句话描述玩家睁开眼看到的场景。
+
+# 可选。本世界自定义属性。想加就加，不想加就删掉整段。
+# type 支持 int / string / bool；int 可选 min/max。
+attributes:
+  # 示例：删掉或改成你的世界需要的属性。
+  energy:
+    type: int
+    min: 0
+    max: 100
+    initial: 100
+    description: 一个示例数值属性。

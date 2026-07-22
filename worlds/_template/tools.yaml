@@ -1,0 +1,8 @@
+# include 引用底座内置工具集。
+include:
+  - core.state
+  - core.memory
+  - core.lookup
+
+# extra 指向本世界特有工具模块（相对 world 目录或绝对路径）。
+extra: []

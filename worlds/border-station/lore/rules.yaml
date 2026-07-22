@@ -1,0 +1,7 @@
+- id: rule.fixed-lore-vs-memory
+  name: 固定资料与存档记忆分工
+  aliases: [资料分工, lore memory 分工]
+  summary: 固定世界设定查 lookup/read_lore；当前存档旧经历查 search_memory/read_memory；当前状态查 get_status。
+  body: 人物初始设定、地点设定、背景规则等不随存档变化的信息属于固定资料。玩家在本存档中已经做过的事、旧承诺和旧事件属于长期记忆。当前地点、状态、关系和事实属于当前状态；现有状态工具只写固定核心字段和已声明属性，关系与事实的通用写入入口等待新的扩展能力设计。
+  tags: [规则, 工具, 资料分工]
+  visibility: public

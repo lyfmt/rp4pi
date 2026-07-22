@@ -1,0 +1,6 @@
+- id: character.example-guide
+  name: 示例向导
+  summary: 一个示例人物条目，用于展示固定资料格式。
+  aliases: []
+  tags: [示例]
+  visibility: public

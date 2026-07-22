@@ -1,0 +1,15 @@
+# 声明式写作指导目录。writer 按 kind 取全文，默认留空。
+# 启用下面任一示例时，先删除这行 []，再取消注释对应条目。
+[]
+# - kind: style
+#   description: 叙事语气、感官细节、篇幅节奏。
+#   path: ./writing/style.md
+# - kind: dialogue
+#   description: 有 NPC 开口时的对白质感与格式。
+#   # 启用前需创建 ./writing/dialogue.md。
+#   path: ./writing/dialogue.md
+# - kind: adult
+#   description: 成人场景指导。
+#   # 启用前需创建 ./writing/adult.md。
+#   path: ./writing/adult.md
+#   when: adult_scene

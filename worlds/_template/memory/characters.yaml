@@ -1,0 +1,29 @@
+# OpenViking 记忆 schema（characters）—— OV 0.4.x 形状。
+# 字段结构可按世界调整，但保持 memory_type / directory / filename_template /
+# operation_mode / fields 这些必填项。详见 skills/development-guide/references/openviking.md。
+memory_type: characters
+description: |
+  角色长期记忆。只记录明确出现或被提到的具名角色。
+  出现具名角色、身份、关系、状态或承诺时，至少创建或更新一条 characters 记忆。
+directory: "viking://user/{{ user_space }}/memories/characters"
+filename_template: "{{ name }}.md"
+operation_mode: upsert
+enabled: true
+embedding_template: |-
+  {{ name }}
+
+  {{ summary }}
+overview_template: |-
+  # Characters Overview
+  {% for item in items %}
+  - [{{ item.file_content.name|default(item.file_name, true) }}](./{{ item.file_name }})
+  {% endfor %}
+fields:
+  - name: name
+    type: string
+    description: 角色姓名或称呼。单角色单文件，只提取明确的具名角色。
+    merge_op: immutable
+  - name: summary
+    type: string
+    description: 稳定身份、关系、持有物、承诺和已知状态摘要。
+    merge_op: patch

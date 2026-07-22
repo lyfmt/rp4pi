@@ -1,0 +1,28 @@
+# 声明式生命周期钩子。锚点：session_start / turn_start / turn_committed。
+- name: opening-atmosphere
+  description: 开场给玩家一条氛围提示。
+  on: session_start
+  do:
+    type: inject
+    as: notice
+    text: 晨雾在驿站梁柱间浮动，远处传来断续的马蹄声——这一天不会太平。
+
+- name: clock-drift
+  description: 每回合推进约一小时。
+  on: turn_committed
+  do:
+    type: state
+    mutations:
+      - path: time.hour
+        op: add
+        value: 1
+
+- name: background-beat
+  description: 每隔几回合提醒 GM 引入一个背景事件。
+  on: turn_committed
+  every:
+    turns: 4
+  do:
+    type: inject
+    as: prompt
+    text: 〔场景提示〕适时在叙事里织入一个不打断主线的背景动静（往来旅人、远处骚乱、天色变化等），让驿站显得鲜活。
