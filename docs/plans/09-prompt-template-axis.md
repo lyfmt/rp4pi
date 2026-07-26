@@ -3,7 +3,7 @@
 > 交接文档。承接 07-hooks-axis / 08-writer-upgrade-axis 的「声明式轴」范式。
 > 读者：下一个实现此轴的 agent。**先通读全篇再动手**，尤其「不做什么」与「验收」两节。
 
-> 实施状态：已落地到 `prompt-template-axis` 分支。`MEMORY.md` 索引更新未执行：当前仓库不存在 `MEMORY.md` 或 `docs/MEMORY.md`。
+> 实施状态：**本轴已完成。** loader（`parsePromptTemplates`）、writer 装配（`assembleWriterPrompt`）、schema 白名单（`GM_MARKERS` / `WRITER_MARKERS`）、`_template/world.yaml` 注释示例、`world-pack.md` 文档，以及 `test/world/loader-prompt-template.test.ts` 等测试均已落地，全量测试通过。原文提到的 `prompt-template-axis` 分支已不存在——仓库历史压成单提交，现工作在 `claude` 分支。仓库层面未维护 `MEMORY.md` 索引。
 
 ## 0.5 决策记录（与实现者对齐后敲定，覆盖下文旧默认）
 
@@ -89,7 +89,7 @@
   （即：默认模板里 `writer_base` 就在最前，所以无模板时 writer.md 照常作 system 基底——D2 让它在有模板时才需显式列出。）
 - **世界未声明 `prompt_template.gm`** → 退回现 `resources_discover` 走 `gmPromptPaths` + `context` 追加 hook 提示的行为。
 
-即：**本轴是纯增量，`border-station` 不声明模板则一字节输出不变。** 现有 273 测试必须继续全绿。
+即：**本轴是纯增量，`border-station` 不声明模板则一字节输出不变。** 全量测试必须继续全绿（本轴落地后 `npm test` 为 488 通过 / 1 skipped）。
 
 ## 3. Schema 与类型（`src/world/schema.ts`）
 

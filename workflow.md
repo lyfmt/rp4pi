@@ -2,7 +2,7 @@
 
 **文档状态：** 目标流程，不代表当前全部由 runtime 强制执行。
 
-当前实现与缺口以 [项目控制面](./docs/design/project-control-plane.md) 为准。当前尚未由 runtime 强制保证的部分：NPC 并发编排、三回合因果规划、通用系统状态提交和后台系统调度。
+当前实现与缺口以 [项目控制面](./docs/design/project-control-plane.md) 为准。当前尚未由 runtime 强制保证的部分：NPC 并发编排、三回合因果规划和后台系统调度。
 
 ```text
 用户输入

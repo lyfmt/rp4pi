@@ -9,7 +9,7 @@
 | 模块 | 已实现 | 当前 interface |
 | --- | --- | --- |
 | 启动 | core、two-pass-render、OpenViking memory 三个扩展 | `start.sh` 的 3 个 `-e` 入口 |
-| 世界包 | state、prompts、memory、lore、tools、systems、subagents、writing、revision、hooks | `world.yaml` 及其模块引用 |
+| 世界包 | state、prompts、prompt_template、memory、lore、tools、systems、subagents、writing、revision、hooks；loader 契约收紧：未知顶层键直接拒绝，引用文件（模块 YAML、prompts.gm、memory.schemas、systems、lore.sources[].path、tools.extra）在加载期做存在性校验（writing 指导与 subagent persona 刻意延迟到读取时） | `world.yaml` 及其模块引用；`npm run validate-world`（CLI 入口 `scripts/validate-world.ts`） |
 | 状态 | player、time、scene、attributes、facts、relationships | `get_status` 与窄粒度 `update_*` |
 | System 扩展 | registry、namespaced state、activation/migration、transaction runtime、`commit_turn`、GM/Writer projection、`relay-blueprints` 生成 probe | `defineSystem()`、`commit_turn`、`get_status`、全量 story snapshot 与 `/roll` |
 | Writer | direction packet、写作指导、初稿、风格增强、惯性与套话审查、有限重写 | `submit_direction_packet` |
@@ -101,7 +101,7 @@ P1 以 `relay-blueprints` 生成系统真实垂直切片收口；可升级自定
 
 ## 恢复点
 
-旧实现只作为只读材料保存在以下分支：
+旧实现只作为只读材料保存在以下分支（**仅维护者本地可用，未推送远端**，公开 clone 中无法访问）：
 
 - `archive/pre-extension-reset-master-20260710`
 - `archive/pre-extension-reset-next-20260710`

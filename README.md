@@ -10,7 +10,7 @@
 
 | 模块 | 能力 |
 | --- | --- |
-| 世界包 | 用 YAML、Markdown 和可选 TypeScript System module 定义世界、初始状态、提示词、资料、角色、写作规则与 Hook |
+| 世界包 | 用 YAML、Markdown 和可选 TypeScript System module 定义世界、初始状态、提示词、资料、角色、写作规则与 Hook；GM / Writer 的 prompt 可自定义为带 role 的有序消息链 |
 | 状态 | SQLite 持久化玩家、场景、时间、自定义属性及独立 System state |
 | GM / Writer | GM 负责裁定和状态推进，Writer 负责玩家可见正文，避免写作阶段改写确定性状态 |
 | 存档 | 提供 `/save`、`/load`、`/roll`，按成功故事回合保存完整状态快照 |
@@ -52,13 +52,9 @@ cp .env.example .env
 ./start.sh
 ```
 
-首次启动会从 `.pi/agent/settings.example.json` 生成本地的 `.pi/agent/settings.json`。请将其中的 provider、model 和 thinking 配置改为当前 Pi 环境可用的值。本机已有 `~/.pi/agent/auth.json` 时，启动脚本会将其复制到项目的本地配置目录；这些本地认证文件不会被 Git 跟踪。
+首次启动会从 `.pi/agent/settings.example.json` 生成本地的 `.pi/agent/settings.json`。请将其中的 provider、model 和 thinking 配置改为当前 Pi 环境可用的值。本机已有 `~/.pi/agent/auth.json` 时，启动脚本会将其复制到项目的本地配置目录；这些本地认证文件不会被 Git 跟踪。若本机没有现成的 Pi 认证，进入交互界面后先执行 `/login` 登录。
 
-不使用 OpenViking 时可显式禁用：
-
-```bash
-RP_DISABLE_OPENVIKING=1 ./start.sh
-```
+`cp .env.example .env` 生成的配置默认已禁用 OpenViking（`RP_DISABLE_OPENVIKING=1`），全新检出无需本地 OpenViking 服务即可运行。需要长期记忆时，注释掉 `.env` 里的该行并配置 `OPENVIKING_URL`（见下方「配置」）。
 
 启动后输入：
 
@@ -83,7 +79,7 @@ OpenViking 连接参数可写入本地 `.env`：
 | `RP_WORLD` | 首个非 `_` 开头的世界目录 | 选择 `worlds/<name>/` |
 | `RP_SQLITE_PATH` | `data/rp.sqlite` | SQLite 状态文件位置 |
 | `RP_DEMO_MODE` | `1` | 设为 `0` 关闭 demo mode |
-| `RP_DISABLE_OPENVIKING` | 未设置 | 设为 `1` 禁用长期记忆连接 |
+| `RP_DISABLE_OPENVIKING` | `1`（`.env.example` 默认设置） | 设为 `1` 禁用长期记忆连接；启用 OpenViking 时注释掉 `.env` 里的该行 |
 | `RP_AGENT_ENV_FILE` | `.env` | 指定 OpenViking 环境配置文件 |
 
 密钥只应放在 `.env`、环境变量或 `.pi/agent/` 下的本地文件中，不要写入世界包、源码或 Issue。
@@ -94,21 +90,27 @@ OpenViking 连接参数可写入本地 `.env`：
 
 ```bash
 cp -r worlds/_template worlds/my-world
+npm run validate-world my-world
 RP_WORLD=my-world ./start.sh
 ```
 
 世界包字段和扩展方式见 [world-pack 指南](skills/development-guide/references/world-pack.md)。
+
+### 从 SillyTavern 角色卡迁移
+
+支持从 SillyTavern 角色卡（PNG / WEBP / JPEG / JSON）迁移。在 Pi 会话里让 agent 使用 `migrate-st-card` 技能，它会审计角色卡语义并映射为世界包模块。角色卡提取脚本已收编在 `skills/migrate-st-card/scripts/`（需 Python >= 3.10）。迁移产物是一个 `worlds/<name>/` 世界包。
 
 ## 常用命令
 
 ```bash
 npm run typecheck
 npm test
+npm run validate-world
 bash scripts/smoke-demo.sh
 bash scripts/smoke-writer-live.sh
 ```
 
-`smoke-demo.sh` 会执行类型检查、全量测试、扩展启动检查，并在 OpenViking 可达时验证真实的 append / commit 流程。`smoke-writer-live.sh` 会调用真实模型；可通过 `RP_WRITER_LIVE_SMOKE=0` 跳过。
+`npm run validate-world` 严格校验 `worlds/` 下所有世界包（可传世界名只校验一个），任一世界加载失败即以退出码 1 结束。`smoke-demo.sh` 会执行类型检查、全量测试、扩展启动检查，并在 OpenViking 可达时验证真实的 append / commit 流程。`smoke-writer-live.sh` 会调用真实模型；可通过 `RP_WRITER_LIVE_SMOKE=0` 跳过。
 
 运行中的 Slash Commands：
 

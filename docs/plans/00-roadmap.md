@@ -23,6 +23,8 @@
 - `../template/tavern2agent/references/ts-engine.md`
 - `../template/tavern2agent/references/tool-abstraction.md`
 
+> 以 `../template/tavern2agent/` 开头的条目是仓库外的外部参考（上游 Xerxes-2/tavern2agent，MIT 许可），仅维护者本地可访问，公开 clone 中不可用。其角色卡提取脚本已收编到 `skills/migrate-st-card/scripts/`（附 `LICENSE.tavern2agent`）。
+
 ## 阶段拆分
 
 | 阶段 | 计划书 | 目标 |
@@ -41,6 +43,7 @@
 | 声明式 hooks | 已实现 | 后台 jobs 不在当前 Hook 能力内 |
 | NPC 角色能力 | 角色物化、动态角色和轨迹已实现 | 并发编排仍由 GM 提示词驱动，runtime 不强制 |
 | Writer 写作指导与 revision | 已实现 | 三回合因果规划尚未实现 |
+| Prompt 模板 | GM / Writer prompt 可被世界包自定义为带 role 的有序消息链（含 SillyTavern 式伪造对话），已实现（见 `09-prompt-template-axis.md`） | 条件注入、injection_depth 等按深度/条件注入尚未实现 |
 | 系统扩展 | P1 runtime、工具绑定、全量 snapshot/roll、`relay-blueprints` 生成探针与升级验收已实现 | RNG 抽卡探针、jobs、audit、visibility adapter 尚未实现 |
 
 ### 当前里程碑
