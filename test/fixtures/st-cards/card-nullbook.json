@@ -1,0 +1,21 @@
+{
+  "spec": "chara_card_v2",
+  "spec_version": "2.0",
+  "data": {
+    "name": "无书者",
+    "description": "一张 character_book 为 null 的合成测试卡，用于验证提取脚本不崩溃。",
+    "personality": "",
+    "scenario": "",
+    "first_mes": "……",
+    "mes_example": "",
+    "alternate_greetings": [],
+    "creator_notes": "合成测试卡。",
+    "tags": [
+      "测试"
+    ],
+    "creator": "my-rp-agent fixtures",
+    "character_version": "1.0",
+    "extensions": {},
+    "character_book": null
+  }
+}

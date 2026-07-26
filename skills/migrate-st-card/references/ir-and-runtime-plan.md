@@ -23,6 +23,8 @@ Create `worlds/<slug>/migration/card-ir.json` before editing runtime files. The 
 }
 ```
 
+A worked example built from the synthetic fixture card (`test/fixtures/st-cards/sample-card-v2.png`) lives at `references/example-card-ir.json`; it also shows how to mark empty blocks as explicitly not applicable.
+
 ## Mutable Concepts
 
 Do not copy variable names as state fields by default. Name the domain concept first.

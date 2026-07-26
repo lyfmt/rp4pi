@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "source": {
+    "file": "test/fixtures/st-cards/sample-card-v2.png",
+    "spec": "chara_card_v2",
+    "spec_version": "2.0",
+    "name": "临风",
+    "extractor": "skills/migrate-st-card/scripts/extract_card.py",
+    "synthetic": true,
+    "note": "本示例基于仓库自制的合成 fixture 卡，演示 IR 必备块的最小填法"
+  },
+  "persona": [
+    "临风：雾杉镇的年轻守剑人，寡言，习惯用行动代替解释",
+    "性格：冷静、重诺、不擅寒暄",
+    "佩剑「断雨」从不离身，剑身有一道旧裂纹，是师父遗物"
+  ],
+  "settingFacts": [
+    "雾杉镇常年被雾气笼罩，镇口有一棵三人合抱的老杉树",
+    "镇民迷路时靠敲老杉树上的铜铃辨向",
+    "当前时节为深秋，镇口的雾比往年更浓，传闻雾里有人影徘徊"
+  ],
+  "playerSetup": [
+    {
+      "field": "opening",
+      "question": "从哪个开场进入：老杉树下初遇 / 雨夜镇长相召 / 河滩错过异象",
+      "default": "老杉树下初遇"
+    }
+  ],
+  "openings": [
+    {
+      "id": "tree-meeting",
+      "from": "first_mes",
+      "summary": "老杉树下初遇，临风领玩家入雾",
+      "setupSignal": "默认路线；场景=镇口老杉树，天气=浓雾"
+    },
+    {
+      "id": "mayor-summons",
+      "from": "alternate_greetings[0]",
+      "summary": "雨夜客栈门口，镇长有请",
+      "setupSignal": "镇长委托线；场景=客栈门口，天气=夜雨"
+    },
+    {
+      "id": "riverbank-late",
+      "from": "alternate_greetings[1]",
+      "summary": "河滩边玩家来迟，雾中之物已离开",
+      "setupSignal": "追查异象线；玩家开局即背负一次错过"
+    }
+  ],
+  "mechanics": [],
+  "mutableConcepts": [],
+  "visibilityFacts": [
+    {
+      "fact": "镇长的密室里藏着二十年前的旧档案，记录了老杉树下埋过什么",
+      "layer": "hidden-canonical",
+      "handling": "GM 私有笔记；未经游玩揭示不得进入玩家可见 prompt、公共记忆或 writer 输入"
+    }
+  ],
+  "memoryRules": [],
+  "worldbookEntries": [
+    {
+      "index": 0,
+      "comment": "地点·雾杉镇",
+      "keys": ["雾杉镇", "小镇"],
+      "enabled": true,
+      "constant": true,
+      "disposition": "lore",
+      "reason": "固定世界事实，常驻触发",
+      "target": "worlds/<slug>/lore/town.yaml"
+    },
+    {
+      "index": 1,
+      "comment": "物品·断雨",
+      "keys": ["断雨", "佩剑"],
+      "enabled": true,
+      "constant": false,
+      "disposition": "lore",
+      "reason": "固定物品设定（来历、外观），非可变库存",
+      "target": "worlds/<slug>/lore/items.yaml"
+    },
+    {
+      "index": 2,
+      "comment": "草稿·旧档案",
+      "keys": ["旧档案"],
+      "enabled": false,
+      "constant": false,
+      "disposition": "discarded",
+      "reason": "未完成的作者草稿；其中的隐藏钩子已单独提炼为 visibilityFacts 的 hidden-canonical 条目，草稿文本本身不迁移",
+      "target": null
+    }
+  ],
+  "scriptFindings": [],
+  "style": {
+    "tone": "克制、冷冽的武侠短句",
+    "dialogue": "临风台词短促，常以动作描写代替情绪陈述",
+    "language": "zh-CN"
+  },
+  "discardedStRuntimePatches": [],
+  "notApplicable": {
+    "mechanics": "卡内无公式、阈值或触发规则",
+    "mutableConcepts": "卡内无 [initvar]/[mvu] 变量，未发现可变概念",
+    "memoryRules": "无作者指定的记忆规则；按项目默认记忆策略处理",
+    "scriptFindings": "卡内无 Tavern Helper / regex 脚本",
+    "discardedStRuntimePatches": "合成卡无 ST 运行时补丁残留"
+  }
+}

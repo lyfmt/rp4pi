@@ -2,17 +2,19 @@
 
 ## Extraction
 
-Prefer card JSON. For image cards, use the tavern2agent scripts if available:
+Prefer card JSON. For image cards, use the bundled scripts under `skills/migrate-st-card/scripts/` (Python >= 3.10, no external dependencies):
 
 ```bash
-python3 ../template/tavern2agent/scripts/extract_card.py card.png card.json
-python3 ../template/tavern2agent/scripts/list_entries.py card.json
-python3 ../template/tavern2agent/scripts/list_entries.py card.json --filter initvar
-python3 ../template/tavern2agent/scripts/list_entries.py card.json --filter mvu_update
-python3 ../template/tavern2agent/scripts/get_entry.py card.json 0,3-5
+python3 skills/migrate-st-card/scripts/extract_card.py card.png card.json
+python3 skills/migrate-st-card/scripts/list_entries.py card.json
+python3 skills/migrate-st-card/scripts/list_entries.py card.json --filter initvar
+python3 skills/migrate-st-card/scripts/list_entries.py card.json --filter mvu_update
+python3 skills/migrate-st-card/scripts/get_entry.py card.json 0,3-5
 ```
 
-If those scripts are unavailable, ask for an exported JSON card or inspect the image with an equivalent ST card extractor. Do not manually transcribe a large card from screenshots.
+`list_entries.py` and `get_entry.py` accept both an extracted card JSON (embedded `character_book.entries` array) and a standalone ST worldbook export (uid-keyed `entries` dict with `key`/`disable` fields); both are normalized to the embedded V2 shape, and `character_book: null` is treated as no worldbook. Upstream reference: the scripts were adopted from tavern2agent (<https://github.com/Xerxes-2/tavern2agent>, MIT; see `scripts/LICENSE.tavern2agent`).
+
+If python3 is unavailable, ask for an exported JSON card or inspect the image with an equivalent ST card extractor. Do not manually transcribe a large card from screenshots.
 
 ## Source Map
 

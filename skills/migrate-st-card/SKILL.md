@@ -18,8 +18,9 @@ ST card -> semantic audit -> card IR -> runtime/world plan -> worlds/<name>/ mod
 ## Workflow
 
 1. Extract or load the card JSON.
-   If `../template/tavern2agent/scripts/` exists, prefer its no-dependency scripts:
-   `extract_card.py`, `list_entries.py`, `get_entry.py`.
+   Use the bundled zero-dependency scripts in `scripts/` (Python >= 3.10):
+   `extract_card.py`, `list_entries.py`, `get_entry.py`. They accept both
+   embedded-card worldbooks and standalone ST worldbook exports.
 
 2. Audit sources before writing project files.
    Read `references/source-audit.md` for field coverage, worldbook/MVU/script handling, and ST cleanup rules.

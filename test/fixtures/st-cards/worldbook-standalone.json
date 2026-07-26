@@ -1,0 +1,49 @@
+{
+  "entries": {
+    "0": {
+      "uid": 0,
+      "key": [
+        "灯塔",
+        "海岬"
+      ],
+      "keysecondary": [],
+      "comment": "地点·白鲸灯塔",
+      "content": "白鲸灯塔立在海岬尽头，灯已熄了七年，塔身的白漆被海风剥得斑驳。",
+      "constant": true,
+      "selective": false,
+      "order": 100,
+      "position": 0,
+      "disable": false
+    },
+    "1": {
+      "uid": 1,
+      "key": [
+        "守灯人"
+      ],
+      "keysecondary": [
+        "老周"
+      ],
+      "comment": "人物·守灯人",
+      "content": "最后一任守灯人姓周，七年前某个起雾的夜晚之后，再没有人见过他。",
+      "constant": false,
+      "selective": true,
+      "order": 90,
+      "position": 1,
+      "disable": false
+    },
+    "2": {
+      "uid": 2,
+      "key": [
+        "海雾"
+      ],
+      "keysecondary": [],
+      "comment": "草稿·海雾异象",
+      "content": "（未启用草稿）起雾的夜里，灯塔顶层偶尔会亮起绿光，没人承认见过。",
+      "constant": false,
+      "selective": false,
+      "order": 80,
+      "position": 1,
+      "disable": true
+    }
+  }
+}
