@@ -31,8 +31,16 @@ export type TurnActivityState = {
   streamStage?: LiveProgressStage;
   /** Name of the writer tool currently being called (draft stage lookups). */
   toolName?: string;
-  /** Memory sedimentation outcome, kept for the post-pipeline linger display. */
-  memory?: "pending" | "ok" | "error";
+  /**
+   * Memory sedimentation lifecycle, kept across pipeline_done: "pending" while
+   * the turn is being appended to OV, "extracting" while the server-side
+   * extraction task runs (usually minutes, after pipeline_done), then a
+   * terminal outcome that lingers briefly before the widget clears — "ok",
+   * "error", or "unknown" (the watch gave up without a server verdict).
+   */
+  memory?: "pending" | "extracting" | "ok" | "error" | "unknown";
+  /** Short human-readable outcome detail (e.g. "2 条记忆") for the ✓ display. */
+  memoryDetail?: string;
 };
 
 export function createTurnActivityState(): TurnActivityState {
@@ -81,6 +89,7 @@ export function applyLiveProgressEvent(state: TurnActivityState, event: LiveProg
       state.detail = event.detail ?? state.detail;
       if (event.stage === "openviking") {
         state.memory = "ok";
+        state.memoryDetail = event.detail;
       }
       break;
     case "stage_error":
@@ -88,6 +97,12 @@ export function applyLiveProgressEvent(state: TurnActivityState, event: LiveProg
       if (event.stage === "openviking") {
         state.memory = "error";
       }
+      break;
+    case "memory_extracting":
+      state.memory = "extracting";
+      break;
+    case "memory_unknown":
+      state.memory = "unknown";
       break;
     case "model_delta":
       if (state.streamStage === event.stage) {
@@ -128,13 +143,25 @@ export function renderTurnActivityLines(input: RenderTurnActivityInput): string[
   const width = Math.max(20, input.width);
 
   if (state.phase === "done") {
-    // Post-pipeline linger: only the memory-sedimentation outcome remains
-    // interesting; everything else already landed as a committed message.
+    // Post-pipeline: only memory sedimentation remains interesting; everything
+    // else already landed as a committed message. The extraction task runs for
+    // minutes after pipeline_done, so the widget keeps pulsing until the real
+    // outcome arrives, then lingers on ✓/✗.
+    if (state.memory === "pending" || state.memory === "extracting") {
+      const icon = MEMORY_ICON_FRAMES[frame % MEMORY_ICON_FRAMES.length] ?? "◈";
+      return [truncateToWidth(`${icon} 记忆沉淀 · 正在提取长期记忆…`, width)];
+    }
     if (state.memory === "ok") {
-      return [truncateToWidth("◈ 记忆已沉淀 ✓", width)];
+      const suffix = state.memoryDetail !== undefined && state.memoryDetail.length > 0 ? `（${state.memoryDetail}）` : "";
+      return [truncateToWidth(`◈ 记忆已沉淀 ✓${suffix}`, width)];
     }
     if (state.memory === "error") {
       return [truncateToWidth("◈ 记忆沉淀失败 ✗（正文不受影响）", width)];
+    }
+    if (state.memory === "unknown") {
+      // No server verdict (watch timeout / task API unreachable): the
+      // extraction may still land, so declare uncertainty, never a fake ✗.
+      return [truncateToWidth("◈ 记忆沉淀状态未知（后台继续，正文不受影响）", width)];
     }
     return [];
   }
@@ -147,7 +174,8 @@ export function renderTurnActivityLines(input: RenderTurnActivityInput): string[
 
   if (stage === "openviking") {
     const icon = MEMORY_ICON_FRAMES[frame % MEMORY_ICON_FRAMES.length] ?? "◈";
-    lines.push(truncateToWidth(`${icon} 记忆沉淀 · 正在写入长期记忆…`, width));
+    const action = state.memory === "extracting" ? "正在提取长期记忆…" : "正在写入长期记忆…";
+    lines.push(truncateToWidth(`${icon} 记忆沉淀 · ${action}`, width));
   } else {
     const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "⠿";
     const label = STAGE_LABELS[stage] ?? stage;

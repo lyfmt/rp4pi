@@ -13,7 +13,7 @@
 | 状态 | player、time、scene、attributes、facts、relationships | `get_status` 与窄粒度 `update_*` |
 | System 扩展 | registry、namespaced state、activation/migration、transaction runtime、`commit_turn`、GM/Writer projection、`relay-blueprints` 生成 probe | `defineSystem()`、`commit_turn`、`get_status`、全量 story snapshot 与 `/roll` |
 | Writer | direction packet、写作指导、初稿、风格增强、惯性与套话审查、有限重写 | `submit_direction_packet` |
-| 渲染 | 回合活动挂件（阶段动画、writer/修订流式正文预览、记忆沉淀动态图标）+ 单行 working label；正文经 idle 投递；在途 story commit（投递→snapshot→turn_committed hook→OV 沉淀）在下一条输入与 session 关闭前强制排空 | `turn-activity-widget.ts`、`story-commit-tracker.ts`（`input` / `session_shutdown` 排水） |
+| 渲染 | 回合活动挂件（阶段动画、writer/修订流式正文预览、记忆沉淀动态图标）+ 单行 working label；正文经 idle 投递；记忆沉淀追踪 OV 异步提取任务到真实完成（commit 只入队，挂件跨 pipeline_done 持续脉冲，✓ 带提取条数，超时/任务 API 不可达显示"状态未知"而非假 ✗；watcher 与排水链解耦、新回合与 shutdown 取消；widget key 所有权守卫防跨回合误清）；在途 story commit（投递→snapshot→turn_committed hook→OV 沉淀）在下一条输入与 session 关闭前强制排空 | `turn-activity-widget.ts`、`extraction-watch.ts`、`story-commit-tracker.ts`（`input` / `session_shutdown` 排水） |
 | 存档 | save、session binding、latest state、最近 2 个完整确定性 story snapshot | `/save`、`/load`、`/roll` |
 | 角色 | 世界角色、动态角色、角色轨迹 | GM 调用 `subagent`；runtime 不自动调度 |
 | Hook | session_start、turn_start、turn_committed | inject、state、delegate |

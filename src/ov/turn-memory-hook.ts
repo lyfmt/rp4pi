@@ -1,5 +1,5 @@
 import type { RpDatabase } from "../state/sqlite.ts";
-import type { OpenVikingClient, OpenVikingMemoryPolicy } from "./client.ts";
+import type { OpenVikingClient, OpenVikingCommitResult, OpenVikingMemoryPolicy } from "./client.ts";
 import { getOrCreateOvSessionForSave, replaceOvSessionForSave } from "./session-binding.ts";
 import { userSpaceForSave } from "./uri.ts";
 
@@ -15,18 +15,27 @@ export type AppendTurnToMemoryInput = {
   fallbackMemoryPolicy: OpenVikingMemoryPolicy;
 };
 
-export async function appendTurnToMemory(input: AppendTurnToMemoryInput): Promise<void> {
+export type AppendTurnToMemoryResult = {
+  /** Save-scoped client the append ran against — the task watch must reuse it. */
+  saveClient: OpenVikingClient;
+  /** Background extraction task id, when the server commits asynchronously. */
+  taskId?: string;
+};
+
+export async function appendTurnToMemory(input: AppendTurnToMemoryInput): Promise<AppendTurnToMemoryResult> {
   const sessionId = getOrCreateOvSessionForSave(input.db, input.saveId);
   const saveClient = input.client.forUser(userSpaceForSave(input.saveId));
+  let commit: OpenVikingCommitResult;
   try {
-    await appendTurnToSession(saveClient, sessionId, input, input.memoryPolicy);
+    commit = await appendTurnToSession(saveClient, sessionId, input, input.memoryPolicy);
   } catch (error) {
     if (!isUnknownMemoryTypesError(error)) {
       throw error;
     }
     const fallbackSessionId = replaceOvSessionForSave(input.db, input.saveId);
-    await appendTurnToSession(saveClient, fallbackSessionId, input, input.fallbackMemoryPolicy);
+    commit = await appendTurnToSession(saveClient, fallbackSessionId, input, input.fallbackMemoryPolicy);
   }
+  return { saveClient, taskId: commit.taskId };
 }
 
 async function appendTurnToSession(
@@ -34,11 +43,11 @@ async function appendTurnToSession(
   sessionId: string,
   input: AppendTurnToMemoryInput,
   memoryPolicy: OpenVikingMemoryPolicy
-): Promise<void> {
+): Promise<OpenVikingCommitResult> {
   await client.ensureSession(sessionId, { memoryPolicy });
   await client.addSessionMessage(sessionId, "user", input.playerInput);
   await client.addSessionMessage(sessionId, "assistant", input.writerProse);
-  await client.commitSession(sessionId, { keepRecentCount: 0 });
+  return client.commitSession(sessionId, { keepRecentCount: 0 });
 }
 
 function isUnknownMemoryTypesError(error: unknown): boolean {

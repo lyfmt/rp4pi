@@ -38,6 +38,16 @@ export type LiveProgressEvent =
   | { type: "model_delta"; stage: LiveProgressStage; text: string }
   | { type: "tool_call"; stage: "draft"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; stage: "draft"; id: string; name: string; result: string; isError: boolean }
+  // The OV commit endpoint only ENQUEUES server-side memory extraction; this
+  // marks the hand-off. The matching openviking stage_end/stage_error arrives
+  // when the background task actually finishes — typically minutes later,
+  // AFTER pipeline_done (the memory watcher outlives the pipeline).
+  | { type: "memory_extracting"; taskId?: string }
+  // The watch gave up (watch timeout, or the task API stopped answering)
+  // WITHOUT a server verdict. Deliberately distinct from stage_error: the
+  // extraction may well still land, so the UI must show "unknown", not a
+  // definitive ✗ — the original bug was showing a definitive ✓ too early.
+  | { type: "memory_unknown"; reason?: string }
   | { type: "pipeline_done" };
 
 export type LiveProgressSink = (event: LiveProgressEvent) => void | Promise<void>;
@@ -60,21 +70,35 @@ export function createLiveProgressSink(ctx: ExtensionContextLike): LiveProgressS
 
   // `stage_end.output` carries the full rendered prose for draft/revision
   // stages — never put it in the label. Only `detail` (short metadata like
-  // `snapshotTurnNo=3` or `append_turn`) is label-safe.
+  // `snapshotTurnNo=3`) is label-safe. The openviking stage is excluded
+  // entirely: memory sedimentation runs after the agent is idle (the loader is
+  // gone), and its completion can arrive minutes later — mid-NEXT-turn, where
+  // a label write would clobber that turn's loader. The turn-activity widget
+  // owns memory display.
   const render = (event: LiveProgressEvent): string | undefined => {
     switch (event.type) {
       case "stage_start":
+        if (event.stage === "openviking") {
+          return undefined;
+        }
         return `writer · ${event.stage}${event.detail ? ` — ${singleLine(event.detail)}` : ""}`;
       case "stage_end":
+        if (event.stage === "openviking") {
+          return undefined;
+        }
         return `writer · ${event.stage} ✓${event.detail ? ` — ${singleLine(event.detail)}` : ""}`;
       case "stage_error":
+        if (event.stage === "openviking") {
+          return undefined;
+        }
         return `writer · ${event.stage} ✗ ${singleLine(event.error)}`;
       case "tool_call":
         return `writer · draft ▸ ${event.name}`;
       case "pipeline_done":
         return undefined;
       default:
-        // model_start / model_end / tool_result are telemetry, not UI.
+        // model_start / model_end / tool_result / memory_extracting are
+        // telemetry (or widget-owned), not label UI.
         return undefined;
     }
   };

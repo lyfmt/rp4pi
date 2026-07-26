@@ -77,6 +77,33 @@ test("openviking stage renders the dedicated pulsing memory icon", () => {
   assert.ok(frames.size > 1, "memory icon must animate");
 });
 
+test("memory extraction keeps the pulsing line across pipeline_done until the real outcome", () => {
+  const state = createTurnActivityState();
+  applyLiveProgressEvent(state, { type: "stage_start", stage: "openviking", detail: "append_turn" });
+  applyLiveProgressEvent(state, { type: "memory_extracting", taskId: "task-1" });
+  assert.ok(render(state)[0]?.includes("正在提取长期记忆"), "extracting shows the extract wording");
+
+  applyLiveProgressEvent(state, { type: "pipeline_done" });
+  const [line] = render(state, 1);
+  assert.ok(line !== undefined && line.includes("记忆沉淀"), `line: ${line}`);
+  assert.ok(MEMORY_ICON_FRAMES.some((icon) => line.startsWith(icon)), `still pulsing after pipeline_done: ${line}`);
+  const frames = new Set([render(state, 0)[0], render(state, 1)[0], render(state, 2)[0]]);
+  assert.ok(frames.size > 1, "extraction line must keep animating after pipeline_done");
+
+  // The watcher reports the real outcome minutes later.
+  applyLiveProgressEvent(state, { type: "stage_end", stage: "openviking", detail: "2 条记忆" });
+  assert.deepEqual(render(state), ["◈ 记忆已沉淀 ✓（2 条记忆）"]);
+});
+
+test("a late extraction failure renders the error linger", () => {
+  const state = createTurnActivityState();
+  applyLiveProgressEvent(state, { type: "stage_start", stage: "openviking" });
+  applyLiveProgressEvent(state, { type: "memory_extracting" });
+  applyLiveProgressEvent(state, { type: "pipeline_done" });
+  applyLiveProgressEvent(state, { type: "stage_error", stage: "openviking", error: "boom" });
+  assert.ok(render(state)[0]?.includes("记忆沉淀失败"));
+});
+
 test("after pipeline_done the memory outcome lingers", () => {
   const state = createTurnActivityState();
   applyLiveProgressEvent(state, { type: "stage_start", stage: "openviking" });
@@ -234,6 +261,78 @@ test("a new pipeline resets state and cancels a pending linger clear", async () 
   assert.equal(canceled, 1, "pending linger clear canceled");
   const component = mountWidget(widgets);
   assert.ok(component.render(80)[0]?.includes("执笔中"));
+});
+
+test("widget sink survives pipeline_done while extraction runs, then lingers on the late outcome", async () => {
+  const { ctx, widgets } = fakeCtx();
+  const timeouts: Array<() => void> = [];
+  const sink = createTurnActivitySink(ctx, {
+    setIntervalFn: () => Symbol("interval"),
+    clearIntervalFn: () => {},
+    setTimeoutFn: (callback) => {
+      timeouts.push(callback);
+      return timeouts.length;
+    },
+    clearTimeoutFn: () => {}
+  });
+  assert.ok(sink !== undefined);
+
+  await sink({ type: "stage_start", stage: "openviking", detail: "append_turn" } satisfies LiveProgressEvent);
+  await sink({ type: "memory_extracting", taskId: "task-1" });
+  await sink({ type: "pipeline_done" });
+  assert.equal(widgets.size, 1, "widget must stay while the extraction task runs");
+  assert.equal(timeouts.length, 0, "no linger scheduled before the outcome is known");
+  const component = mountWidget(widgets);
+  assert.ok(component.render(80)[0]?.includes("记忆沉淀"));
+
+  // Watcher reports the real outcome after pipeline_done.
+  await sink({ type: "stage_end", stage: "openviking", detail: "2 条记忆" });
+  assert.equal(widgets.size, 1, "outcome lingers");
+  assert.ok(component.render(80)[0]?.includes("记忆已沉淀"));
+  assert.equal(timeouts.length, 1, "linger clear scheduled once the outcome lands");
+  timeouts[0]?.();
+  assert.equal(widgets.size, 0, "widget cleared after the linger");
+
+  // The sink is finished: further stray events must not resurrect the widget.
+  await sink({ type: "stage_start", stage: "draft" });
+  assert.equal(widgets.size, 0);
+});
+
+test("a stale sink cannot tear down its successor's widget", async () => {
+  const { ctx, widgets } = fakeCtx();
+  const timeouts: Array<() => void> = [];
+  const options = {
+    setIntervalFn: () => Symbol("interval"),
+    clearIntervalFn: () => {},
+    setTimeoutFn: (callback: () => void) => {
+      timeouts.push(callback);
+      return timeouts.length;
+    },
+    clearTimeoutFn: () => {}
+  };
+  const turn1 = createTurnActivitySink(ctx, options);
+  const turn2 = createTurnActivitySink(ctx, options);
+  assert.ok(turn1 !== undefined && turn2 !== undefined);
+
+  // Turn 1 finishes its pipeline but its extraction watch is still out.
+  await turn1({ type: "stage_start", stage: "openviking" } satisfies LiveProgressEvent);
+  await turn1({ type: "memory_extracting", taskId: "task-1" });
+  await turn1({ type: "pipeline_done" });
+  assert.equal(widgets.size, 1);
+
+  // Turn 2 takes over the widget key.
+  await turn2({ type: "stage_start", stage: "draft" });
+  assert.equal(widgets.size, 1);
+
+  // Turn 1's watcher finally reports; its linger fires — but turn 2 owns the
+  // widget now, so nothing may be removed.
+  await turn1({ type: "stage_end", stage: "openviking" });
+  for (const fire of timeouts.splice(0)) {
+    fire();
+  }
+  assert.equal(widgets.size, 1, "successor widget must survive the stale sink's cleanup");
+  const component = mountWidget(widgets);
+  assert.ok(component.render(80)[0]?.includes("执笔中"), "turn 2's display is intact");
 });
 
 test("sink degrades to undefined without setWidget", () => {

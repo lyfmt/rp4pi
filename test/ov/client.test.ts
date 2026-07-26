@@ -183,6 +183,46 @@ test("commitSession sends only supported commit fields", async () => {
   assert.deepEqual(result, { status: "accepted", taskId: "task-1" });
 });
 
+test("getTask parses the task tracker snapshot", async () => {
+  const calls: FetchCall[] = [];
+  const client = createOpenVikingClient(
+    { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+    async (url, init) => {
+      calls.push({ url: String(url), init });
+      return jsonResponse({
+        status: "ok",
+        result: {
+          task_id: "task-1",
+          task_type: "session_commit",
+          status: "completed",
+          stage: "completed",
+          result: { memories_extracted: { memory_write: 2, skill_write: 1 } }
+        }
+      });
+    }
+  );
+
+  const task = await client.getTask("task-1");
+
+  assert.equal(calls[0]?.url, "https://ov.example.test/api/v1/tasks/task-1");
+  assert.deepEqual(task, { status: "completed", memoriesExtracted: 3, error: undefined });
+});
+
+test("getTask surfaces failed tasks and tolerates missing result payloads", async () => {
+  const client = createOpenVikingClient(
+    { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+    async () =>
+      jsonResponse({
+        status: "ok",
+        result: { task_id: "task-1", status: "failed", error: "extraction blew up" }
+      })
+  );
+
+  const task = await client.getTask("task-1");
+
+  assert.deepEqual(task, { status: "failed", memoriesExtracted: undefined, error: "extraction blew up" });
+});
+
 test("find and read parse OpenViking responses", async () => {
   const calls: FetchCall[] = [];
   const client = createOpenVikingClient(
@@ -261,17 +301,32 @@ test("OpenViking client passes a timeout signal to every fetch call", async () =
 });
 
 test("readOpenVikingTimeouts defaults to 10s requests and a longer 60s commit", () => {
-  assert.deepEqual(readOpenVikingTimeouts({}), { requestTimeoutMs: 10_000, commitTimeoutMs: 60_000 });
+  assert.deepEqual(readOpenVikingTimeouts({}), {
+    requestTimeoutMs: 10_000,
+    commitTimeoutMs: 60_000,
+    extractWatchTimeoutMs: 600_000,
+    extractPollIntervalMs: 3_000
+  });
 });
 
 test("readOpenVikingTimeouts honors env overrides and falls back on invalid values", () => {
   assert.deepEqual(
-    readOpenVikingTimeouts({ OPENVIKING_REQUEST_TIMEOUT_MS: "2500", OPENVIKING_COMMIT_TIMEOUT_MS: "120000" }),
-    { requestTimeoutMs: 2500, commitTimeoutMs: 120_000 }
+    readOpenVikingTimeouts({
+      OPENVIKING_REQUEST_TIMEOUT_MS: "2500",
+      OPENVIKING_COMMIT_TIMEOUT_MS: "120000",
+      OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS: "30000",
+      OPENVIKING_EXTRACT_POLL_INTERVAL_MS: "500"
+    }),
+    { requestTimeoutMs: 2500, commitTimeoutMs: 120_000, extractWatchTimeoutMs: 30_000, extractPollIntervalMs: 500 }
   );
   assert.deepEqual(
-    readOpenVikingTimeouts({ OPENVIKING_REQUEST_TIMEOUT_MS: "not-a-number", OPENVIKING_COMMIT_TIMEOUT_MS: "-5" }),
-    { requestTimeoutMs: 10_000, commitTimeoutMs: 60_000 }
+    readOpenVikingTimeouts({
+      OPENVIKING_REQUEST_TIMEOUT_MS: "not-a-number",
+      OPENVIKING_COMMIT_TIMEOUT_MS: "-5",
+      OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS: "0",
+      OPENVIKING_EXTRACT_POLL_INTERVAL_MS: ""
+    }),
+    { requestTimeoutMs: 10_000, commitTimeoutMs: 60_000, extractWatchTimeoutMs: 600_000, extractPollIntervalMs: 3_000 }
   );
 });
 

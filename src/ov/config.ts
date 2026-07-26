@@ -33,20 +33,43 @@ export function readOpenVikingConfig(env: OpenVikingEnv = process.env, projectRo
 // defaults rather than handing AbortSignal.timeout a NaN/0/negative budget.
 export const DEFAULT_OPENVIKING_REQUEST_TIMEOUT_MS = 10_000;
 export const DEFAULT_OPENVIKING_COMMIT_TIMEOUT_MS = 60_000;
+// Commit only ENQUEUES server-side memory extraction (it returns a task_id);
+// the extraction itself is a background LLM task that routinely takes minutes
+// (upstream 503 retries included). The extract watch is how long the UI keeps
+// following that task before declaring the outcome unknown, and the poll
+// interval is how often it asks — both far coarser than the request guards.
+export const DEFAULT_OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS = 600_000;
+export const DEFAULT_OPENVIKING_EXTRACT_POLL_INTERVAL_MS = 3_000;
 
 export type OpenVikingTimeoutEnv = Partial<
-  Record<"OPENVIKING_REQUEST_TIMEOUT_MS" | "OPENVIKING_COMMIT_TIMEOUT_MS", string>
+  Record<
+    | "OPENVIKING_REQUEST_TIMEOUT_MS"
+    | "OPENVIKING_COMMIT_TIMEOUT_MS"
+    | "OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS"
+    | "OPENVIKING_EXTRACT_POLL_INTERVAL_MS",
+    string
+  >
 >;
 
 export type OpenVikingTimeouts = {
   requestTimeoutMs: number;
   commitTimeoutMs: number;
+  extractWatchTimeoutMs: number;
+  extractPollIntervalMs: number;
 };
 
 export function readOpenVikingTimeouts(env: OpenVikingTimeoutEnv = process.env): OpenVikingTimeouts {
   return {
     requestTimeoutMs: parseTimeoutMs(env.OPENVIKING_REQUEST_TIMEOUT_MS, DEFAULT_OPENVIKING_REQUEST_TIMEOUT_MS),
-    commitTimeoutMs: parseTimeoutMs(env.OPENVIKING_COMMIT_TIMEOUT_MS, DEFAULT_OPENVIKING_COMMIT_TIMEOUT_MS)
+    commitTimeoutMs: parseTimeoutMs(env.OPENVIKING_COMMIT_TIMEOUT_MS, DEFAULT_OPENVIKING_COMMIT_TIMEOUT_MS),
+    extractWatchTimeoutMs: parseTimeoutMs(
+      env.OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS,
+      DEFAULT_OPENVIKING_EXTRACT_WATCH_TIMEOUT_MS
+    ),
+    extractPollIntervalMs: parseTimeoutMs(
+      env.OPENVIKING_EXTRACT_POLL_INTERVAL_MS,
+      DEFAULT_OPENVIKING_EXTRACT_POLL_INTERVAL_MS
+    )
   };
 }
 
@@ -54,8 +77,10 @@ function parseTimeoutMs(raw: string | undefined, fallback: number): number {
   if (raw === undefined || raw.trim() === "") {
     return fallback;
   }
-  const value = Number(raw);
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  // Floor BEFORE validating: "0.5" floors to 0, which must fall back rather
+  // than hand a zero budget to AbortSignal.timeout or a poll loop.
+  const value = Math.floor(Number(raw));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 type OpenVikingSettings = {

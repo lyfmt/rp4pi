@@ -65,6 +65,9 @@ function scopedOvClient(saveId: string, methods: Partial<OpenVikingClient>): Ope
     async commitSession(sessionId: string, options: { keepRecentCount: number; wait?: boolean }) {
       return (await methods.commitSession?.(sessionId, options)) ?? {};
     },
+    async getTask(taskId: string) {
+      return (await methods.getTask?.(taskId)) ?? {};
+    },
     async find(query: string, targetUri: string, limit: number) {
       return (await methods.find?.(query, targetUri, limit)) ?? [];
     },
@@ -78,7 +81,7 @@ function scopedOvClient(saveId: string, methods: Partial<OpenVikingClient>): Ope
 test("appendTurnToMemory creates RP memory session, appends messages, then commits", async () => {
   await withOvHarness(async ({ db, saveId }) => {
     const calls: string[] = [];
-    await appendTurnToMemory({
+    const appendResult = await appendTurnToMemory({
       db,
       saveId,
       playerInput: "I help the courier.",
@@ -117,6 +120,10 @@ test("appendTurnToMemory creates RP memory session, appends messages, then commi
     assert.equal(calls[1], "user:I help the courier.");
     assert.equal(calls[2], "assistant:You bind the courier's wound.");
     assert.equal(calls[3], "commit:0");
+    // The commit's task hand-off (and the save-scoped client it ran against)
+    // surfaces to the caller so the extraction watch can follow the task.
+    assert.equal(appendResult.taskId, "task-1");
+    assert.equal(typeof appendResult.saveClient.getTask, "function");
     const taskRows = db.prepare("SELECT name FROM sqlite_master WHERE name LIKE '%task%'").all();
     assert.deepEqual(taskRows, []);
   });

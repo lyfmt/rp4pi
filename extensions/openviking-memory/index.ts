@@ -7,6 +7,7 @@ import { deliverWhenIdle, runtimeMessageToOutbound } from "../../src/runtime/idl
 import { createOpenVikingMemoryErrorMessage } from "../../src/runtime/prose-message.ts";
 import { createTextComponent } from "../../src/runtime/tui-text-component.ts";
 import { appendTurnToMemory } from "../../src/ov/turn-memory-hook.ts";
+import { watchMemoryExtraction, type ExtractionWatchHandle } from "../../src/ov/extraction-watch.ts";
 import type { PiLike } from "../../src/types/pi.ts";
 
 // OpenViking long-term memory: an independent extension that appends each
@@ -17,6 +18,12 @@ import type { PiLike } from "../../src/types/pi.ts";
 // failure here surfaces as a styled notice but never blocks or rolls back the
 // turn. Disabling this extension (drop its `-e` flag) loses long-term memory
 // while the rest of the game keeps working.
+//
+// The OV commit only ENQUEUES server-side extraction (minutes of LLM work);
+// after a successful append this extension follows the returned task with a
+// detached watch (extraction-watch.ts) so the turn-activity widget can show
+// sedimentation until it REALLY lands — without ever blocking the story-commit
+// drains that gate shutdown and follow-up turns.
 //
 // It also registers the renderer for the openviking-memory-error custom type,
 // since that message is owned entirely by this feature.
@@ -42,13 +49,27 @@ export function activate(pi: PiLike): void {
     memory_types: world.memory.fallbackMemoryTypes
   };
 
+  // At most one extraction watch is interesting at a time: a new turn takes
+  // over the widget, so a previous turn's still-running watch is stale and is
+  // canceled before the new append starts. All watches are canceled on
+  // shutdown — they are detached from the drained story-commit chain by design
+  // (nobody may block a quit on minutes of server-side extraction).
+  const activeWatchers = new Set<ExtractionWatchHandle>();
+  const cancelWatchers = (): void => {
+    for (const watcher of activeWatchers) {
+      watcher.cancel();
+    }
+    activeWatchers.clear();
+  };
+
   const unsubscribe = onTurnRendered(async ({ ctx, saveId, playerInput, prose, progress }) => {
     if (playerInput === undefined) {
       return;
     }
+    cancelWatchers();
     await emitLiveProgress(progress, { type: "stage_start", stage: "openviking", detail: "append_turn" });
     try {
-      await appendTurnToMemory({
+      const { saveClient, taskId } = await appendTurnToMemory({
         db,
         client: ovClient,
         saveId,
@@ -57,7 +78,21 @@ export function activate(pi: PiLike): void {
         memoryPolicy,
         fallbackMemoryPolicy
       });
-      await emitLiveProgress(progress, { type: "stage_end", stage: "openviking", detail: "append_turn" });
+      if (taskId === undefined || progress === undefined) {
+        // Synchronous commit (no background task) or no UI to report to: the
+        // append itself is the whole observable outcome.
+        await emitLiveProgress(progress, { type: "stage_end", stage: "openviking" });
+        return;
+      }
+      // Commit only enqueued the extraction — declare the hand-off and follow
+      // the task to its real outcome. The watch is detached: the story-commit
+      // chain (and thus shutdown/input drains) completes now.
+      await emitLiveProgress(progress, { type: "memory_extracting", taskId });
+      const watcher = watchMemoryExtraction({ client: saveClient, taskId, progress });
+      activeWatchers.add(watcher);
+      void watcher.done.finally(() => {
+        activeWatchers.delete(watcher);
+      });
     } catch (error) {
       await emitLiveProgress(progress, { type: "stage_error", stage: "openviking", error: error instanceof Error ? error.message : String(error) });
       // OpenViking is eventual long-term memory; the story commit already
@@ -77,7 +112,10 @@ export function activate(pi: PiLike): void {
   pi.on("session_shutdown", async () => {
     // The final turn's memory append may still be in flight through the
     // turn-rendered bus — drain before unsubscribing (see story-commit-tracker).
+    // Any extraction watch spawned by that drain is then canceled: the UI it
+    // reports to is going away, and its timers must not pin the process.
     await drainStoryCommits();
+    cancelWatchers();
     unsubscribe();
   });
 }

@@ -6,10 +6,20 @@
 //
 // Lifecycle per pipeline:
 //   first event    → install widget (animation timer starts inside the factory)
-//   pipeline_done  → memory outcome present? linger briefly showing ✓/✗, then
-//                    remove the widget; otherwise remove immediately.
+//   pipeline_done  → memory outcome resolved? linger briefly showing ✓/✗, then
+//                    remove the widget. Memory still pending/extracting? keep
+//                    the widget pulsing — the OV extraction task runs minutes
+//                    past pipeline_done, and its terminal stage_end/stage_error
+//                    arrives later through the same sink, which then lingers
+//                    and removes. No memory stage at all → remove immediately.
 // A new pipeline while the linger is pending cancels the pending removal and
 // resets the state in place.
+//
+// One sink is created per turn, but the extraction watch means a previous
+// turn's sink can still be alive when the next turn installs the same widget
+// key. Ownership (per ui object) makes the stale sink's removal a no-op so it
+// can never tear down its successor's widget; once a sink removes (or loses)
+// its widget it is finished and ignores every further event.
 
 import type { ExtensionContextLike, PiComponentLike, PiTuiHostLike } from "../types/pi.ts";
 import { createLiveProgressSink, type LiveProgressSink } from "./live-progress.ts";
@@ -24,6 +34,9 @@ const WIDGET_KEY = "rp-turn-activity";
 const FRAME_INTERVAL_MS = 120;
 const MEMORY_LINGER_MS = 1500;
 
+/** Which sink currently owns the widget key, per ui surface. */
+const widgetOwners = new WeakMap<object, symbol>();
+
 export type TurnActivityWidgetOptions = {
   setIntervalFn?: (callback: () => void, ms: number) => unknown;
   clearIntervalFn?: (handle: unknown) => void;
@@ -31,6 +44,20 @@ export type TurnActivityWidgetOptions = {
   clearTimeoutFn?: (handle: unknown) => void;
   lingerMs?: number;
 };
+
+/** Post-pipeline memory-watch events continue an existing display instead of
+ * starting a new pipeline's. */
+function isMemoryContinuationEvent(event: Parameters<LiveProgressSink>[0]): boolean {
+  if (event.type === "memory_extracting" || event.type === "memory_unknown") {
+    return true;
+  }
+  return (event.type === "stage_end" || event.type === "stage_error") && event.stage === "openviking";
+}
+
+/** Terminal sedimentation outcomes — the widget lingers on these, then clears. */
+function isTerminalMemory(memory: string | undefined): boolean {
+  return memory === "ok" || memory === "error" || memory === "unknown";
+}
 
 export function createTurnActivitySink(
   ctx: ExtensionContextLike,
@@ -47,8 +74,10 @@ export function createTurnActivitySink(
   const clearTimeoutFn = options.clearTimeoutFn ?? ((handle) => clearTimeout(handle as Parameters<typeof clearTimeout>[0]));
   const lingerMs = options.lingerMs ?? MEMORY_LINGER_MS;
 
+  const owner = Symbol("turn-activity-sink");
   const state: TurnActivityState = createTurnActivityState();
   let installed = false;
+  let finished = false;
   let activeComponent: (PiComponentLike & { dispose?(): void }) | undefined;
   let pendingClear: unknown;
 
@@ -57,10 +86,16 @@ export function createTurnActivitySink(
       return;
     }
     installed = false;
-    try {
-      setWidget(WIDGET_KEY, undefined);
-    } catch {
-      // Widget teardown must never break the turn.
+    finished = true;
+    // Only the current owner may clear the shared key — a stale sink whose
+    // widget was already replaced by the next turn's must not tear that down.
+    if (widgetOwners.get(ui) === owner) {
+      widgetOwners.delete(ui);
+      try {
+        setWidget(WIDGET_KEY, undefined);
+      } catch {
+        // Widget teardown must never break the turn.
+      }
     }
     // pi disposes replaced components, but do not depend on it — the animation
     // timer must stop even if the host skips dispose.
@@ -73,6 +108,7 @@ export function createTurnActivitySink(
       return;
     }
     installed = true;
+    widgetOwners.set(ui, owner);
     try {
       setWidget(WIDGET_KEY, (tui: PiTuiHostLike) => {
         let frame = 0;
@@ -104,7 +140,17 @@ export function createTurnActivitySink(
     }
   };
 
+  const scheduleLingerClear = (): void => {
+    pendingClear = setTimeoutFn(() => {
+      pendingClear = undefined;
+      removeWidget();
+    }, lingerMs);
+  };
+
   return (event) => {
+    if (finished) {
+      return;
+    }
     if (pendingClear !== undefined) {
       clearTimeoutFn(pendingClear);
       pendingClear = undefined;
@@ -112,24 +158,30 @@ export function createTurnActivitySink(
 
     if (event.type === "pipeline_done") {
       applyLiveProgressEvent(state, event);
-      if (state.memory === "ok" || state.memory === "error") {
+      if (isTerminalMemory(state.memory)) {
         // Let the sedimentation outcome linger so the player actually sees it.
-        pendingClear = setTimeoutFn(() => {
-          pendingClear = undefined;
-          removeWidget();
-        }, lingerMs);
+        scheduleLingerClear();
+      } else if (state.memory === "pending" || state.memory === "extracting") {
+        // Extraction still running server-side: keep the widget pulsing until
+        // the memory watcher reports the real outcome.
       } else {
         removeWidget();
       }
       return;
     }
 
-    // First event of a new pipeline after a finished one: reset in place.
-    if (state.phase === "done") {
+    // First event of a new pipeline after a finished one resets in place —
+    // unless it is the memory watcher completing the PREVIOUS pipeline's
+    // sedimentation, which continues the existing display.
+    if (state.phase === "done" && !isMemoryContinuationEvent(event)) {
       Object.assign(state, createTurnActivityState());
     }
     applyLiveProgressEvent(state, event);
     installWidget();
+    // Memory outcome arriving after pipeline_done: show it, then clear.
+    if (state.phase === "done" && isTerminalMemory(state.memory)) {
+      scheduleLingerClear();
+    }
   };
 }
 

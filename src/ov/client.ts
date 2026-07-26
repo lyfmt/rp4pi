@@ -23,11 +23,21 @@ export type OpenVikingCommitResult = {
   taskId?: string;
 };
 
+export type OpenVikingTaskStatus = {
+  /** pending | running | completed | failed (server task tracker vocabulary). */
+  status?: string;
+  /** Total memories the completed task wrote (summed across memory types). */
+  memoriesExtracted?: number;
+  /** Failure detail when the task ended in `failed`. */
+  error?: string;
+};
+
 export type OpenVikingClient = {
   forUser(user: string): OpenVikingClient;
   ensureSession(sessionId: string, options?: OpenVikingEnsureSessionOptions): Promise<void>;
   addSessionMessage(sessionId: string, role: OpenVikingRole, content: string): Promise<void>;
   commitSession(sessionId: string, options: { keepRecentCount: number }): Promise<OpenVikingCommitResult>;
+  getTask(taskId: string): Promise<OpenVikingTaskStatus>;
   find(query: string, targetUri: string, limit: number): Promise<OpenVikingSearchResult[]>;
   read(uri: string): Promise<string>;
 };
@@ -167,6 +177,24 @@ export function createOpenVikingClient(
       return {
         status: typeof body?.status === "string" ? body.status : undefined,
         taskId: typeof body?.task_id === "string" ? body.task_id : undefined
+      };
+    },
+
+    async getTask(taskId) {
+      const body = (await request(`/api/v1/tasks/${encodeURIComponent(taskId)}`)) as UnknownRecord | undefined;
+      const result = (typeof body?.result === "object" && body.result !== null ? body.result : {}) as UnknownRecord;
+      const extracted = result.memories_extracted;
+      let memoriesExtracted: number | undefined;
+      if (typeof extracted === "object" && extracted !== null) {
+        memoriesExtracted = Object.values(extracted as Record<string, unknown>).reduce<number>(
+          (sum, count) => sum + (typeof count === "number" ? count : 0),
+          0
+        );
+      }
+      return {
+        status: typeof body?.status === "string" ? body.status : undefined,
+        memoriesExtracted,
+        error: typeof body?.error === "string" ? body.error : undefined
       };
     },
 
