@@ -633,3 +633,47 @@ test("writer and writerAgents thinking levels are appended to model ids", async 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("streamed text deltas are forwarded as accumulated model_delta progress events", async () => {
+  const root = scaffoldRoot("rp-writer-stream-");
+  try {
+    const client = createConfiguredWriterClient({
+      projectRoot: root,
+      ctx: fakeCtx,
+      revision: { bannedWords: [] },
+      complete: async (_model, request, options): Promise<Completion> => {
+        // Simulate provider streaming for both the draft and the rewrite call.
+        const prose = /执笔者。/.test(request.systemPrompt) ? ["修订", "正文。"] : ["初稿", "正文。"];
+        for (const delta of prose) {
+          (options as { onText?: (delta: string) => void }).onText?.(delta);
+        }
+        if (/审稿人/.test(request.systemPrompt)) {
+          return { parts: [{ type: "text", text: "ISSUES 重复" }] };
+        }
+        if (/执笔者。/.test(request.systemPrompt)) {
+          return { parts: [{ type: "text", text: "<content>修订正文。</content>" }] };
+        }
+        return { parts: [{ type: "text", text: "<content>初稿正文。</content>" }] };
+      }
+    });
+
+    const deltas: Array<{ stage?: string; text?: string }> = [];
+    const prose = await client.render({
+      ...renderInput("流式要素"),
+      progress: (event: LiveProgressEvent & { text?: string }) => {
+        if (event.type === "model_delta") {
+          deltas.push({ stage: event.stage, text: event.text });
+        }
+      }
+    });
+
+    assert.equal(prose, "修订正文。");
+    const draftDeltas = deltas.filter((delta) => delta.stage === "draft");
+    assert.deepEqual(draftDeltas.map((delta) => delta.text), ["初稿", "初稿正文。"], "draft deltas accumulate");
+    const rewriteDeltas = deltas.filter((delta) => delta.stage === "rewrite");
+    assert.ok(rewriteDeltas.length > 0, "rewrite stage streams deltas too");
+    assert.equal(rewriteDeltas.at(-1)?.text, "修订正文。");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

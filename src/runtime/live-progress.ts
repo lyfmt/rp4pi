@@ -31,6 +31,11 @@ export type LiveProgressEvent =
   | { type: "stage_error"; stage: LiveProgressStage; error: string }
   | { type: "model_start"; stage: LiveProgressStage; sessionId?: string; model?: string; callIndex?: number }
   | { type: "model_end"; stage: LiveProgressStage; output?: string; toolCallCount?: number; callIndex?: number }
+  // Streaming text accumulated so far for the current model call. `text` is the
+  // RAW accumulated stream (may contain <thinking>/<content> markup) — display
+  // sinks must sanitize before showing (see turn-activity.ts). The single-line
+  // working-message sink ignores it entirely.
+  | { type: "model_delta"; stage: LiveProgressStage; text: string }
   | { type: "tool_call"; stage: "draft"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; stage: "draft"; id: string; name: string; result: string; isError: boolean }
   | { type: "pipeline_done" };

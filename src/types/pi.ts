@@ -19,6 +19,18 @@ export interface ExtensionUIContextLike {
   notify(message: string, type?: "info" | "warning" | "error"): void;
   setWorkingMessage(message?: string): void;
   /**
+   * Set a widget above/below the editor. Accepts prerendered lines or a
+   * component factory; pass `undefined` as content to remove the widget.
+   * Optional because headless contexts (rpc/json/print, tests) omit it.
+   */
+  setWidget?(
+    key: string,
+    content: string[] | ((tui: PiTuiHostLike, theme: PiThemeLike) => PiComponentLike) | undefined,
+    options?: { placement?: "aboveEditor" | "belowEditor" }
+  ): void;
+  /** Set footer status text for a key; `undefined` clears it. */
+  setStatus?(key: string, text: string | undefined): void;
+  /**
    * Show a custom focus-grabbing component and resolve with whatever it passes
    * to `done`. The factory receives pi's TUI host, theme, keybindings, and the
    * `done` callback. We deliberately keep `tui`/`theme`/`keybindings` as

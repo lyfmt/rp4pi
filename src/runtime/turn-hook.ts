@@ -13,7 +13,7 @@ import { commitTurn } from "./turn-commit.ts";
 import { deliverWhenIdle, runtimeMessageToOutbound } from "./idle-delivery.ts";
 import { emitLiveProgress } from "./live-progress.ts";
 import { emitTurnRendered } from "./turn-events.ts";
-import { createLiveProgressSink } from "./live-progress.ts";
+import { createTurnProgressSink } from "./turn-activity-widget.ts";
 import type { WriterClient } from "./writer-client.ts";
 import type { StorySnapshotCoordinator } from "../state/story-snapshot-coordinator.ts";
 
@@ -57,7 +57,9 @@ export function createAgentEndHandler(input: CreateAgentEndHandlerInput) {
     renderedToolCallIds.add(pending.toolCallId);
 
     const playerInput = latestPlayerInput(entries);
-    const progress = createLiveProgressSink(ctx);
+    // Rich sink: turn-activity widget (animated stages, streaming prose tail,
+    // memory-sedimentation icon) composed with the single-line working label.
+    const progress = createTurnProgressSink(ctx);
     let completionRegistered = false;
     try {
       const result = await commitTurn({

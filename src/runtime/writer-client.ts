@@ -68,15 +68,20 @@ export type WriterCompletion = {
 
 type WriterToolSchema = { name: string; description: string; parameters: Record<string, unknown> };
 
+type CompleteOptions = {
+  apiKey: string;
+  headers: Record<string, string> | undefined;
+  maxTokens: number;
+  sessionId: string;
+  /** Called with each raw text delta as the provider streams it (thinking
+   * deltas excluded). Optional; scripted test completes may ignore it. */
+  onText?: (delta: string) => void;
+};
+
 type Complete = (
   model: unknown,
   request: { systemPrompt: string; messages: PiAiMessage[]; tools: WriterToolSchema[] },
-  options: {
-    apiKey: string;
-    headers: Record<string, string> | undefined;
-    maxTokens: number;
-    sessionId: string;
-  }
+  options: CompleteOptions
 ) => Promise<WriterCompletion>;
 
 type PiAiModel = {
@@ -433,7 +438,7 @@ async function completeWithProgress(args: {
   complete: Complete;
   model: unknown;
   request: { systemPrompt: string; messages: PiAiMessage[]; tools: WriterToolSchema[] };
-  options: { apiKey: string; headers: Record<string, string> | undefined; maxTokens: number; sessionId: string };
+  options: CompleteOptions;
   progress?: LiveProgressSink;
   stage: LiveProgressStage;
   callIndex?: number;
@@ -445,10 +450,25 @@ async function completeWithProgress(args: {
     model: describeModel(args.model),
     callIndex: args.callIndex
   });
+  // Forward streamed text to the progress sink as accumulated model_delta
+  // events so the TUI can preview prose while it is being written. Fire-and-
+  // forget (`void`): a delta must never block or fail the provider stream.
+  let accumulated = "";
+  const progress = args.progress;
+  const options: CompleteOptions =
+    progress === undefined
+      ? args.options
+      : {
+          ...args.options,
+          onText: (delta) => {
+            accumulated += delta;
+            void emitLiveProgress(progress, { type: "model_delta", stage: args.stage, text: accumulated });
+          }
+        };
   const completion =
     args.complete === defaultComplete
-      ? await defaultComplete(args.model, args.request, args.options)
-      : await args.complete(args.model, args.request, args.options);
+      ? await defaultComplete(args.model, args.request, options)
+      : await args.complete(args.model, args.request, options);
   const toolCallCount = completion.parts.filter((part) => part.type === "toolCall").length;
   await emitLiveProgress(args.progress, {
     type: "model_end",
@@ -611,12 +631,7 @@ export function buildWriterSystemPrompt(projectRoot: string, guides: readonly Wr
 async function defaultComplete(
   model: unknown,
   request: { systemPrompt: string; messages: PiAiMessage[]; tools: WriterToolSchema[] },
-  options: {
-    apiKey: string;
-    headers: Record<string, string> | undefined;
-    maxTokens: number;
-    sessionId: string;
-  }
+  options: CompleteOptions
 ): Promise<WriterCompletion> {
   const { stream } = (await import("@earendil-works/pi-ai")) as {
     stream: (
@@ -644,12 +659,14 @@ async function defaultComplete(
     },
     options
   );
-  // Drain the stream so `result()` resolves. Per-token deltas are deliberately
-  // NOT forwarded to the progress sink: the working-message label is single-line
-  // and the raw text (which may include `<thinking>` content) belongs only in
-  // the committed writer-prose message.
-  for await (const _event of messageStream) {
-    void _event;
+  // Drain the stream so `result()` resolves. Text deltas are forwarded to
+  // `options.onText` so the turn-activity widget can preview prose live;
+  // thinking deltas stay private to the model. The single-line working-message
+  // label still never sees raw stream text (see live-progress.ts).
+  for await (const event of messageStream) {
+    if (event.type === "text_delta" && typeof event.delta === "string") {
+      options.onText?.(event.delta);
+    }
   }
   const message = await messageStream.result();
   const parts: WriterCompletePart[] = [];
