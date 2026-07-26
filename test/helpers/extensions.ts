@@ -4,6 +4,7 @@ import type { WriterClient } from "../../src/runtime/writer-client.ts";
 import { resetRuntimeInfrastructureForTest } from "../../src/runtime/bootstrap.ts";
 import { resetTurnListenersForTest } from "../../src/runtime/turn-events.ts";
 import { resetHookPromptsForTest } from "../../src/hooks/pending-prompts.ts";
+import { resetStoryCommitsForTest } from "../../src/runtime/story-commit-tracker.ts";
 
 // The production runtime is now three independently-loaded extensions (core,
 // two-pass-render, openviking-memory). They share infrastructure through the
@@ -34,6 +35,7 @@ function resetShared(): void {
   resetRuntimeInfrastructureForTest();
   resetTurnListenersForTest();
   resetHookPromptsForTest();
+  resetStoryCommitsForTest();
 }
 
 export function activateAllExtensions(pi: PiLike, options: ActivateAllOptions = {}): void {

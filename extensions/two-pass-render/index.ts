@@ -1,4 +1,5 @@
 import { createAgentEndHandler } from "../../src/runtime/turn-hook.ts";
+import { drainStoryCommits, trackStoryCommit } from "../../src/runtime/story-commit-tracker.ts";
 import { createConfiguredWriterClient, type WriterClient } from "../../src/runtime/writer-client.ts";
 import { buildWriterTools, loadWritingGuideBodies, writingGuideCatalogue } from "../../src/runtime/writer-tools.ts";
 import { getRuntimeInfrastructure } from "../../src/runtime/bootstrap.ts";
@@ -26,6 +27,41 @@ export function activate(pi: PiLike, services: TwoPassRenderServices = {}): void
   const projectRoot = findProjectRoot(import.meta.url);
   const { db, stateStore, systemRuntime, storySnapshots, ovClient, world } =
     getRuntimeInfrastructure(projectRoot);
+
+  // Story commits (prose delivery → snapshot → turn_committed hooks → long-term
+  // memory) run in the background after agent_end — nothing in pi awaits them.
+  // Single-shot modes (`pi -p`, the live smoke) and /new / /resume / quit
+  // dispose the session as soon as the prompt resolves, which invalidates the
+  // captured ctx mid-chain and silently loses the snapshot, the hook drift, and
+  // the memory append. pi awaits session_shutdown handlers BEFORE invalidating,
+  // so track every commit in the shared registry and drain it here; core drains
+  // too before unsubscribing its turn_committed hook listener (its shutdown
+  // handler runs before ours — activation order).
+  const observeCompletion = (completion: Promise<void>): void => {
+    trackStoryCommit(completion);
+    services.observeCompletion?.(completion);
+  };
+  pi.on("session_shutdown", async () => {
+    await drainStoryCommits();
+  });
+
+  // Rapid back-to-back inputs (scripted `pi -p a b`, fast typists) start the
+  // next GM turn while the previous turn's commit is still waiting for its
+  // idle-delivery window — the poller then never sees idle during the next
+  // stream, times out, and that turn's prose/snapshot/memory are lost. pi
+  // awaits `input` handlers BEFORE the new prompt reaches the agent, and the
+  // agent is idle at that point, so draining here deterministically flushes the
+  // previous story commit (prose lands in the transcript before the new user
+  // message — writer history and GM context stay ordered). Skip during
+  // streaming (steer/followUp): the current turn has not ended, and blocking a
+  // steer on a minutes-long writer render would freeze the input.
+  pi.on("input", async (event) => {
+    const streamingBehavior = (event as { streamingBehavior?: string } | undefined)?.streamingBehavior;
+    if (streamingBehavior !== undefined) {
+      return;
+    }
+    await drainStoryCommits();
+  });
 
   pi.on("agent_end", createAgentEndHandler({
     db,
@@ -60,7 +96,7 @@ export function activate(pi: PiLike, services: TwoPassRenderServices = {}): void
       }),
     sendMessage: (message, options) => pi.sendMessage(message, options),
     setTimeoutFn: services.setTimeoutFn,
-    observeCompletion: services.observeCompletion
+    observeCompletion
   }));
 }
 

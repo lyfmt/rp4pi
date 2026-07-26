@@ -11,6 +11,7 @@ import {
 } from "../src/hooks/pending-prompts.ts";
 import { createHookDelivery, registerHookNoticeRenderer } from "../src/hooks/wiring.ts";
 import { onTurnRendered } from "../src/runtime/turn-events.ts";
+import { drainStoryCommits } from "../src/runtime/story-commit-tracker.ts";
 import { emitLiveProgress } from "../src/runtime/live-progress.ts";
 import { activateSave } from "../src/state/active-save.ts";
 import { getBoundSave } from "../src/state/session-binding.ts";
@@ -192,7 +193,13 @@ export function activate(pi: PiLike): void {
       throw error;
     }
   });
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", async () => {
+    // In-flight story commits still need this listener (turn_committed hook
+    // drift fires through the turn-rendered bus) — drain them BEFORE
+    // unsubscribing. core's shutdown handler runs first (activation order), so
+    // skipping the drain here would drop the hooks of the final turn in
+    // single-shot runs (`pi -p`) and on quit/session switch.
+    await drainStoryCommits();
     unsubscribeTurnCommittedHooks();
   });
 

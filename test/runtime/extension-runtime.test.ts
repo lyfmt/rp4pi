@@ -703,3 +703,115 @@ test("extension agent_end hook isolates commits per session", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a new input drains the in-flight story commit before proceeding", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-input-drain-"));
+  const sqlitePath = join(dir, "state.sqlite");
+  const previousSqlitePath = process.env.RP_SQLITE_PATH;
+  const previousOvDisable = process.env.RP_DISABLE_OPENVIKING;
+  process.env.RP_SQLITE_PATH = sqlitePath;
+  process.env.RP_DISABLE_OPENVIKING = "1";
+
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+  const sentMessages: Array<{ customType: string }> = [];
+  const tools: ToolResultEntry[] = [];
+  const timers: Array<() => void> = [];
+  let storyCompletion: Promise<void> | undefined;
+  // The next-input race: the previous turn ended but its prose delivery is
+  // still waiting for an idle window. Model it with a controllable isIdle.
+  let idle = false;
+
+  const drainCtx = (getEntries?: () => unknown[]): unknown => {
+    const base = sessionCtx("session-drain", getEntries) as Record<string, unknown>;
+    base.isIdle = () => idle;
+    return base;
+  };
+
+  try {
+    activateAllExtensions(
+      {
+        on(name, handler) {
+          hooks.set(name, handler as (event: unknown, ctx: unknown) => unknown);
+        },
+        registerTool(tool) {
+          tools.push(tool as ToolResultEntry);
+        },
+        registerCommand() {},
+        sendMessage(message) {
+          sentMessages.push({ customType: (message as { customType: string }).customType });
+        }
+      },
+      {
+        observeCompletion(completion) {
+          storyCompletion = completion;
+        },
+        setTimeoutFn: (callback) => {
+          timers.push(callback);
+        },
+        createWriterClient: () => ({
+          render: async () => "Rendered prose."
+        })
+      }
+    );
+
+    const init = tools.find((tool) => tool.name === "initialize_new_game");
+    assert.ok(init);
+    init.execute("c1", { playerName: "Ari", scene: "Start" }, undefined, undefined, drainCtx());
+
+    const packet = {
+      storyElements: {
+        currentSituation: "Situation.",
+        playerIntent: "Intent.",
+        visibleChanges: ["Change."],
+        presentCharacters: ["player"],
+        tension: "Tension."
+      },
+      needsRender: true,
+      directReply: ""
+    };
+
+    const agentEnd = hooks.get("agent_end");
+    const input = hooks.get("input");
+    assert.ok(agentEnd);
+    assert.ok(input, "two-pass-render must register an input handler");
+
+    // The turn ends; delivery starts polling but never sees idle yet.
+    await agentEnd({}, drainCtx(() => entriesWithSubmittedPacket(packet, "第一句输入")));
+
+    let inputResolved = false;
+    const inputDone = Promise.resolve(input({ type: "input", text: "第二句输入", source: "interactive" }, drainCtx())).then(() => {
+      inputResolved = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(inputResolved, false, "input must wait for the in-flight story commit");
+    assert.equal(sentMessages.length, 0, "prose not delivered yet");
+
+    // The agent goes idle (previous prompt fully resolved): queued delivery
+    // polls now succeed, the commit chain completes, and only then does the
+    // input proceed.
+    idle = true;
+    while (timers.length > 0 && !inputResolved) {
+      timers.shift()?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await inputDone;
+    assert.equal(inputResolved, true);
+    assert.equal(sentMessages[0]?.customType, "writer-prose", "prose delivered before the next input proceeds");
+    await awaitStoryCompletion(storyCompletion);
+
+    // A steer during streaming must NOT block on the commit.
+    let steerResolved = false;
+    await Promise.resolve(
+      input({ type: "input", text: "steer", source: "interactive", streamingBehavior: "steer" }, sessionCtx("session-drain"))
+    ).then(() => {
+      steerResolved = true;
+    });
+    assert.equal(steerResolved, true);
+  } finally {
+    if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
+    else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    if (previousOvDisable === undefined) delete process.env.RP_DISABLE_OPENVIKING;
+    else process.env.RP_DISABLE_OPENVIKING = previousOvDisable;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

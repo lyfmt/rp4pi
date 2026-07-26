@@ -1,6 +1,7 @@
 import { getRuntimeInfrastructure } from "../../src/runtime/bootstrap.ts";
 import { findProjectRoot } from "../../src/runtime/paths.ts";
 import { onTurnRendered } from "../../src/runtime/turn-events.ts";
+import { drainStoryCommits } from "../../src/runtime/story-commit-tracker.ts";
 import { emitLiveProgress } from "../../src/runtime/live-progress.ts";
 import { deliverWhenIdle, runtimeMessageToOutbound } from "../../src/runtime/idle-delivery.ts";
 import { createOpenVikingMemoryErrorMessage } from "../../src/runtime/prose-message.ts";
@@ -73,7 +74,10 @@ export function activate(pi: PiLike): void {
       });
     }
   });
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", async () => {
+    // The final turn's memory append may still be in flight through the
+    // turn-rendered bus — drain before unsubscribing (see story-commit-tracker).
+    await drainStoryCommits();
     unsubscribe();
   });
 }
