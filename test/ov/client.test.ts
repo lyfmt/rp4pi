@@ -19,6 +19,8 @@ const createOpenVikingClient =
   clientModule.createOpenVikingClient as typeof import("../../src/ov/client.js").createOpenVikingClient;
 const readOpenVikingConfig =
   configModule.readOpenVikingConfig as typeof import("../../src/ov/config.js").readOpenVikingConfig;
+const readOpenVikingTimeouts =
+  configModule.readOpenVikingTimeouts as typeof import("../../src/ov/config.js").readOpenVikingTimeouts;
 const createSave = saveRepository.createSave as typeof import("../../src/state/save-repository.js").createSave;
 const initializeSchema = sqlite.initializeSchema as typeof import("../../src/state/sqlite.js").initializeSchema;
 const openRpDatabase = sqlite.openRpDatabase as typeof import("../../src/state/sqlite.js").openRpDatabase;
@@ -231,6 +233,104 @@ test("OpenViking client can derive a save-scoped user client", async () => {
   await client.forUser("save-123").ensureSession("session-1");
 
   assert.equal((calls[0]?.init?.headers as Record<string, string>)["X-OpenViking-User"], "save-123");
+});
+
+test("OpenViking client passes a timeout signal to every fetch call", async () => {
+  const calls: FetchCall[] = [];
+  const client = createOpenVikingClient(
+    { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+    async (url, init) => {
+      calls.push({ url: String(url), init });
+      if (calls.length === 1) {
+        return jsonResponse({ status: "error", error: { code: "NOT_FOUND", message: "Session not found" } }, 404);
+      }
+      return jsonResponse({ status: "ok", result: { session_id: "session-1" } });
+    }
+  );
+
+  // Covers both fetch paths: the raw ensureSession GET plus the shared
+  // request() helper (session create after 404, then a message append).
+  await client.ensureSession("session-1");
+  await client.addSessionMessage("session-1", "user", "hello");
+
+  assert.equal(calls.length, 3);
+  for (const call of calls) {
+    assert.ok(call.init?.signal instanceof AbortSignal, `${call.url} is missing a timeout AbortSignal`);
+    assert.equal(call.init?.signal?.aborted, false);
+  }
+});
+
+test("readOpenVikingTimeouts defaults to 10s requests and a longer 60s commit", () => {
+  assert.deepEqual(readOpenVikingTimeouts({}), { requestTimeoutMs: 10_000, commitTimeoutMs: 60_000 });
+});
+
+test("readOpenVikingTimeouts honors env overrides and falls back on invalid values", () => {
+  assert.deepEqual(
+    readOpenVikingTimeouts({ OPENVIKING_REQUEST_TIMEOUT_MS: "2500", OPENVIKING_COMMIT_TIMEOUT_MS: "120000" }),
+    { requestTimeoutMs: 2500, commitTimeoutMs: 120_000 }
+  );
+  assert.deepEqual(
+    readOpenVikingTimeouts({ OPENVIKING_REQUEST_TIMEOUT_MS: "not-a-number", OPENVIKING_COMMIT_TIMEOUT_MS: "-5" }),
+    { requestTimeoutMs: 10_000, commitTimeoutMs: 60_000 }
+  );
+});
+
+// A fetch that never resolves on its own and only rejects when the timeout
+// signal fires — lets the tests observe which timeout budget a call received.
+const hangingFetch: import("../../src/ov/client.js").OpenVikingFetch = (_url, init) =>
+  new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => {
+      reject((init.signal as AbortSignal).reason ?? new Error("aborted"));
+    });
+  });
+
+function withTimeoutEnv(requestMs: string, commitMs: string, run: () => Promise<void>): Promise<void> {
+  const previousRequest = process.env.OPENVIKING_REQUEST_TIMEOUT_MS;
+  const previousCommit = process.env.OPENVIKING_COMMIT_TIMEOUT_MS;
+  process.env.OPENVIKING_REQUEST_TIMEOUT_MS = requestMs;
+  process.env.OPENVIKING_COMMIT_TIMEOUT_MS = commitMs;
+  return run().finally(() => {
+    restoreEnv("OPENVIKING_REQUEST_TIMEOUT_MS", previousRequest);
+    restoreEnv("OPENVIKING_COMMIT_TIMEOUT_MS", previousCommit);
+  });
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
+const isTimeoutRejection = (error: unknown) => (error as { name?: string }).name === "TimeoutError";
+
+test("commitSession uses the commit timeout budget, not the request one", async () => {
+  // Tiny commit budget vs. a huge request budget: the call only aborts quickly
+  // if commitSession really wired timeouts.commitTimeoutMs into its signal.
+  await withTimeoutEnv("60000", "40", async () => {
+    const client = createOpenVikingClient(
+      { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+      hangingFetch
+    );
+
+    const started = Date.now();
+    await assert.rejects(() => client.commitSession("session-1", { keepRecentCount: 0 }), isTimeoutRejection);
+    assert.ok(Date.now() - started < 5000, "commit did not abort within the commit budget");
+  });
+});
+
+test("regular requests honor the request timeout env override", async () => {
+  await withTimeoutEnv("40", "60000", async () => {
+    const client = createOpenVikingClient(
+      { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+      hangingFetch
+    );
+
+    const started = Date.now();
+    await assert.rejects(() => client.addSessionMessage("session-1", "user", "hello"), isTimeoutRejection);
+    assert.ok(Date.now() - started < 5000, "message append did not abort within the request budget");
+  });
 });
 
 test("OpenViking client throws API envelope errors", async () => {

@@ -1,4 +1,4 @@
-import type { OpenVikingClientConfig } from "./config.ts";
+import { readOpenVikingTimeouts, type OpenVikingClientConfig } from "./config.ts";
 
 export type OpenVikingRole = "user" | "assistant";
 
@@ -41,6 +41,13 @@ export function createOpenVikingClient(
   fetchImpl: OpenVikingFetch = fetch
 ): OpenVikingClient {
   const baseUrl = config.baseUrl.replace(/\/+$/, "");
+  // Abort OV requests that hang (an unreachable host that never refuses the
+  // TCP connection would otherwise stall every turn until the OS-level
+  // timeout). The resulting TimeoutError rejects like any other request
+  // failure, so it flows through the existing degradation path (append failure
+  // → styled notice). Regular requests keep the short guard; commitSession
+  // uses the longer commit budget (see config.ts for defaults + env knobs).
+  const timeouts = readOpenVikingTimeouts();
 
   function requestHeaders(extra?: Record<string, string>): Record<string, string> {
     return {
@@ -80,10 +87,15 @@ export function createOpenVikingClient(
     return "result" in payload ? payload.result : payload;
   }
 
-  async function request(path: string, init: RequestInit = {}): Promise<unknown> {
+  async function request(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs: number = timeouts.requestTimeoutMs
+  ): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       ...init,
-      headers: requestHeaders(init.headers as Record<string, string> | undefined)
+      headers: requestHeaders(init.headers as Record<string, string> | undefined),
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (!response.ok) {
@@ -101,7 +113,8 @@ export function createOpenVikingClient(
     async ensureSession(sessionId, options = {}) {
       const encodedSessionId = encodeURIComponent(sessionId);
       const response = await fetchImpl(`${baseUrl}/api/v1/sessions/${encodedSessionId}`, {
-        headers: requestHeaders()
+        headers: requestHeaders(),
+        signal: AbortSignal.timeout(timeouts.requestTimeoutMs)
       });
 
       if (response.ok) {
@@ -137,12 +150,19 @@ export function createOpenVikingClient(
     },
 
     async commitSession(sessionId, options) {
-      const body = (await request(`/api/v1/sessions/${encodeURIComponent(sessionId)}/commit`, {
-        method: "POST",
-        body: JSON.stringify({
-          keep_recent_count: options.keepRecentCount
-        })
-      })) as UnknownRecord | undefined;
+      // Commit runs OV's server-side LLM memory extraction — a healthy but
+      // slow server routinely exceeds the regular guard, so use the longer
+      // commit budget instead of the per-request default.
+      const body = (await request(
+        `/api/v1/sessions/${encodeURIComponent(sessionId)}/commit`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            keep_recent_count: options.keepRecentCount
+          })
+        },
+        timeouts.commitTimeoutMs
+      )) as UnknownRecord | undefined;
 
       return {
         status: typeof body?.status === "string" ? body.status : undefined,
