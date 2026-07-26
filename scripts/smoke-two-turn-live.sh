@@ -38,7 +38,7 @@ RP_SQLITE_PATH="$sqlite_path" timeout "$timeout_seconds" \
   --thinking low \
   --session-id "$session_id" \
   -p \
-  "开始新游戏，使用默认 demo 世界。用一个很短的开场回合完成初始化，并提交需要 writer 渲染的 direction packet。" \
+  "开始新游戏。用一个很短的开场回合完成初始化，并提交需要 writer 渲染的 direction packet。" \
   "我走向受伤的信使，查看他的伤势并询问密信的来历。继续用很短的回合推进并提交 direction packet。"
 echo "PASS two-turn live smoke: both pi turns completed"
 

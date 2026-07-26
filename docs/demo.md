@@ -48,7 +48,7 @@ OV commit 使用异步模式，返回 `task_id` 后后台继续提取记忆。�
 在 Pi 中使用 start-game skill，或直接输入：
 
 ```text
-开始新游戏，使用默认 demo 世界。
+开始新游戏。
 ```
 
 第一轮应触发：

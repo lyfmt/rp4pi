@@ -44,6 +44,11 @@ test("all memory schema files resolve under a single directory", () => {
 
 test("RP_WORLD selection: explicit name wins, else first alphabetically", () => {
   const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  // loadActiveWorld falls back to process.env.RP_WORLD when no explicit name is
+  // given; an ambient value (per-world smoke run, dev shell) must not leak into
+  // these auto-selection assertions.
+  const previousWorld = process.env.RP_WORLD;
+  delete process.env.RP_WORLD;
   try {
     writeWorld(dir, "aardvark", "Aardvark");
     writeWorld(dir, "zebra", "Zebra");
@@ -54,12 +59,16 @@ test("RP_WORLD selection: explicit name wins, else first alphabetically", () => 
     assert.equal(loadActiveWorld(dir, { worldsDir: dir, worldName: "zebra" }).name, "zebra");
     assert.deepEqual(listWorldNames(dir, dir), ["aardvark", "zebra"]);
   } finally {
+    if (previousWorld === undefined) delete process.env.RP_WORLD;
+    else process.env.RP_WORLD = previousWorld;
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test("underscore-prefixed dirs are never listed or auto-selected", () => {
   const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  const previousWorld = process.env.RP_WORLD;
+  delete process.env.RP_WORLD;
   try {
     writeWorld(dir, "_template", "Template");
     writeWorld(dir, "real", "Real");
@@ -67,6 +76,8 @@ test("underscore-prefixed dirs are never listed or auto-selected", () => {
     assert.equal(loadActiveWorld(dir, { worldsDir: dir }).name, "real");
     assert.throws(() => loadActiveWorld(dir, { worldsDir: dir, worldName: "_template" }), /not found/);
   } finally {
+    if (previousWorld === undefined) delete process.env.RP_WORLD;
+    else process.env.RP_WORLD = previousWorld;
     rmSync(dir, { recursive: true, force: true });
   }
 });

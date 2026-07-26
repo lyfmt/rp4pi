@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,8 +23,10 @@ test("demo flow runs state tools, writer commit, and snapshot via real pi contra
   const sqlitePath = join(dir, "state.sqlite");
   const previousSqlitePath = process.env.RP_SQLITE_PATH;
   const previousOvDisable = process.env.RP_DISABLE_OPENVIKING;
+  const previousWorld = process.env.RP_WORLD;
   process.env.RP_SQLITE_PATH = sqlitePath;
   process.env.RP_DISABLE_OPENVIKING = "1"; // fully opt out of OV: no client, no per-turn append, no error message
+  process.env.RP_WORLD = "border-station"; // assertions below name this world's prompts/lore; pin against ambient RP_WORLD
   try {
     const tools: ToolResultEntry[] = [];
     const hooks = new Map<string, (event: unknown, ctx: unknown) => unknown>();
@@ -84,13 +86,22 @@ test("demo flow runs state tools, writer commit, and snapshot via real pi contra
     assert.ok((discover.promptPaths ?? []).every((path) => path.includes("worlds/border-station/")));
     assert.ok((discover.skillPaths ?? []).some((path) => path.endsWith("skills/start-game")));
     assert.ok((discover.skillPaths ?? []).some((path) => path.endsWith("skills/development-guide")));
+    // The discovered set must equal every skills/<dir>/SKILL.md on disk — the
+    // same set start.sh loads via `--skill ./skills/` — so the two skill
+    // sources cannot silently drift apart again (they once diverged 3 vs 5).
+    const skillsDir = new URL("../../skills/", import.meta.url).pathname;
+    const expectedSkillPaths = readdirSync(skillsDir)
+      .filter((entry) => existsSync(join(skillsDir, entry, "SKILL.md")))
+      .sort()
+      .map((entry) => join(skillsDir, entry));
+    assert.deepEqual([...(discover.skillPaths ?? [])].sort(), expectedSkillPaths);
 
     // GM prompt + skill files still carry the demo anchors
     const promptText = (await Promise.all((discover.promptPaths ?? []).map((path) => readFile(path, "utf8")))).join("\n");
     const skillPath = (discover.skillPaths ?? []).find((path) => path.endsWith("skills/start-game"));
     const skillText = skillPath ? await readFile(join(skillPath, "SKILL.md"), "utf8") : "";
     const worldLore = await readFile(new URL("../../worlds/border-station/lore/setting.md", import.meta.url), "utf8");
-    assert.match(skillText, /开始新游戏，使用默认 demo 世界。/);
+    assert.match(skillText, /开始新游戏。/);
     assert.match(promptText, /initialize_new_game/);
     assert.match(promptText, /submit_direction_packet/);
     assert.match(worldLore, /边境驿站/);
@@ -198,6 +209,8 @@ test("demo flow runs state tools, writer commit, and snapshot via real pi contra
     else process.env.RP_SQLITE_PATH = previousSqlitePath;
     if (previousOvDisable === undefined) delete process.env.RP_DISABLE_OPENVIKING;
     else process.env.RP_DISABLE_OPENVIKING = previousOvDisable;
+    if (previousWorld === undefined) delete process.env.RP_WORLD;
+    else process.env.RP_WORLD = previousWorld;
     rmSync(dir, { recursive: true, force: true });
   }
 });

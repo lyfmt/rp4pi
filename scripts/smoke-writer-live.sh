@@ -42,7 +42,7 @@ export RP_DISABLE_OPENVIKING=0
 
 timeout_seconds="${RP_WRITER_LIVE_TIMEOUT_SECONDS:-300}"
 session_id="writer-live-smoke-$(date +%s)-$$"
-prompt="${RP_WRITER_LIVE_PROMPT:-开始新游戏，使用默认 demo 世界。用一个很短的开场回合完成初始化，并提交需要 writer 渲染的 direction packet。}"
+prompt="${RP_WRITER_LIVE_PROMPT:-开始新游戏。用一个很短的开场回合完成初始化，并提交需要 writer 渲染的 direction packet。}"
 tmp_dir="$(mktemp -d)"
 sqlite_path="$tmp_dir/rp-writer-live.sqlite"
 trap 'rm -rf "$tmp_dir"' EXIT

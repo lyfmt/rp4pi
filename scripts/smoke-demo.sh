@@ -7,8 +7,11 @@ cd "$script_dir/.."
 echo "RUN npm run typecheck"
 npm run typecheck
 
+# 按世界冒烟(RP_WORLD=<slug> bash scripts/smoke-demo.sh)时,RP_WORLD 只应作用于
+# 下方的扩展启动冒烟与 live 冒烟;单测是 world 无关的,且部分用例断言 RP_WORLD
+# 未设时的自动选择行为,泄入会必挂(loader.test.ts 的世界选择用例)。
 echo "RUN npm test"
-npm test
+env -u RP_WORLD npm test
 
 if [ ! -x ./start.sh ]; then
   echo "FAIL start.sh is not executable" >&2

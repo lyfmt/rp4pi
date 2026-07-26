@@ -221,8 +221,16 @@ export function createOpenVikingClient(
     },
 
     async read(uri) {
-      const body = (await request(`/api/v1/content/read?uri=${encodeURIComponent(uri)}`)) as UnknownRecord;
-      return String(body.content ?? "");
+      const body = (await request(`/api/v1/content/read?uri=${encodeURIComponent(uri)}`)) as unknown;
+      // OV 0.4.x returns the file content directly as the `result` string
+      // (which `request` already unwrapped); older servers returned a bare
+      // `{ content }` object with no result envelope. Support both — reading
+      // `.content` off a string silently yielded "" for every memory file.
+      if (typeof body === "string") {
+        return body;
+      }
+      const record = (body ?? {}) as UnknownRecord;
+      return String(record.content ?? "");
     }
   };
 }

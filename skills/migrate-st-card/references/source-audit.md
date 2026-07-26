@@ -81,15 +81,39 @@ large HTML replacement -> extract fields, discard UI
 large JSON/rules replacement -> mechanic or data
 ```
 
+## ST Prompt Presets
+
+ST prompt presets (chat-completion presets: `prompts`/`prompt_order` arrays with
+marker slots, injection depth/role settings, plus sampler params) configure ST's
+prompt assembly, not the card's game semantics. Handling:
+
+- Sampler/model params (temperature, penalties, max tokens): discard — model
+  configuration lives in `.pi/agent/settings.json`, never in world packs.
+- Prompt-order scaffolding, marker slots, injection depth/position: discard —
+  this scaffold owns assembly (`prompts.yaml`; `prompt_template` only when
+  default ordering is insufficient).
+- Preset prompt text that carries real world flavor, GM stance, or an output
+  contract (a "main"/"post-history" block with actual setting or tone rules):
+  audit like `system_prompt` — stable stance into `prompts/*.md`, style into
+  `writing/*.md`, bans into `revision.yaml`.
+- COT scaffolds, "思维链/强化思考" blocks, output-format enforcers: discard the
+  shell; if one encodes a real output contract, restate it in
+  `prompts/gm-output.md` terms.
+
+A preset is per-user tuning, not card canon: when a card ships with several
+presets, audit only what changes game semantics, and record the disposition in
+`migration/` like any other source.
+
 ## ST Cleanup
 
-Before project files are considered clean, scan generated prompt/data/skill text:
+Before project files are considered clean, run the residue scan:
 
 ```bash
-rg -n "UpdateVariable|JSON Patch|<%_|__结束__|强化思考要求" \
-  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
-rg -n "\\{\\{(user|char|random|roll|pick|getvar|setvar)" \
-  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
+bash scripts/check-st-residue.sh <slug>
 ```
 
-Allowed hits are only migration notes under `worlds/<name>/migration/`. Runtime-facing files should contain project-native language.
+It scans `worlds/<slug>`, `data`, and `skills/start-game` for ST runtime syntax
+(UpdateVariable / JSON Patch / EJS markers / `{{user}}`-style macros), excluding
+`worlds/<slug>/migration/**`. Allowed hits are only migration notes under
+`worlds/<name>/migration/`. Runtime-facing files should contain project-native
+language.

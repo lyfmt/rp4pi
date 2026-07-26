@@ -5,8 +5,8 @@
 Read these first:
 
 ```bash
-sed -n '1,220p' README.md
-sed -n '1,260p' skills/development-guide/references/world-pack.md
+cat README.md
+cat skills/development-guide/references/world-pack.md
 find worlds/_template -maxdepth 3 -type f | sort
 ```
 
@@ -69,6 +69,7 @@ Keep `_template` untouched except when deliberately improving the template for a
 8. `subagents.yaml`: persistent first-person roles and narrow tool agents.
 9. `hooks.yaml`: lifecycle drift, notices, and background pressure.
 10. `tools.yaml`: built-in groups and any world-local tool modules.
+11. `world.yaml` `systems:` + `systems/*.ts`: world-local System modules, only when the world needs complex mechanics (see module-guide "Systems").
 
 ## 5. Runtime Loop Checklist
 
@@ -106,9 +107,12 @@ Authorship check before validation:
 
 ## 6. Validate
 
-Basic checks:
+Basic checks, fastest first. `validate-world` loads and validates just the
+world manifest contract without booting the runtime — use it as the inner loop
+while iterating on world files:
 
 ```bash
+npm run validate-world <slug>
 npm run typecheck
 npm test
 ```

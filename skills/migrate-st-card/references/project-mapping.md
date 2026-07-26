@@ -110,23 +110,27 @@ implementation gap until the extension contract is redesigned.
 
 ## Validation
 
-Run structural checks:
+Run structural checks, fastest first. `validate-world` loads and validates just
+the manifest contract without booting the runtime — use it as the inner loop
+while iterating on world files:
 
 ```bash
+npm run validate-world <slug>
 npm run typecheck
 npm test
 ```
 
-Run ST residue scans:
+Run the ST residue scan:
 
 ```bash
-rg -n "UpdateVariable|JSON Patch|<%_|__结束__|强化思考要求" \
-  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
-rg -n "\\{\\{(user|char|random|roll|pick|getvar|setvar)" \
-  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
+bash scripts/check-st-residue.sh <slug>
 ```
 
-Expected runtime-facing result: no hits outside migration notes.
+It scans `worlds/<slug>`, `data`, and `skills/start-game` for ST runtime syntax
+(UpdateVariable / JSON Patch / EJS markers / `{{user}}`-style macros), excluding
+the `worlds/<slug>/migration/` audit notes. `PASS` + exit 0 means clean; hits
+are printed as `file:line`. Expected runtime-facing result: no hits outside
+migration notes.
 
 If the world has live behavior, run:
 

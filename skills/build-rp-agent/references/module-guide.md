@@ -17,9 +17,12 @@ subagents: ./subagents.yaml
 hooks: ./hooks.yaml
 writing: ./writing.yaml
 revision: ./revision.yaml
+systems: []
 ```
 
-Do not add runtime secrets or environment-specific connection settings here.
+`systems` is a direct list of module paths (see Systems below); every other
+module key points at a YAML file. Do not add runtime secrets or
+environment-specific connection settings here.
 
 ## State
 
@@ -53,6 +56,41 @@ Use attributes for simple public state. Do not use attributes as a dumping groun
 Current save facts and relationships are state, not lore. They remain readable
 through `get_status`, but this baseline has no general GM-facing write path for
 them. Treat that as an implementation gap, not a prompt convention.
+
+## Systems
+
+Complex mechanics — combat, economy, inventory, progression, quests — have a
+project-native home: world-local System modules.
+
+```yaml
+systems:
+  - ./systems/progression.ts
+```
+
+`systems` in `world.yaml` is a direct list of module paths (unlike `state:` /
+`tools:` it is not expanded as a YAML module). Each file exports one or more
+`defineSystem()` results declaring save-scoped state, a version, commands, and
+a projection. System modules register no Pi tools and never touch SQLite; the
+scaffold persists their state per `(save, system)`.
+
+GM advances System state only through `commit_turn` operations:
+
+```json
+{
+  "operations": [
+    { "system": "progression", "command": "gain_xp", "input": { "amount": 25 } }
+  ]
+}
+```
+
+`commit_turn` only advances state and may run multiple times within a turn.
+Core player/time/scene/attributes changes still go through `update_*`, and the
+presentation handoff still goes through `submit_direction_packet` separately.
+
+Use a System module when a rule must validate transitions, apply formulas, or
+persist per save. Do not encode such rules in prompt prose and do not overload
+`attributes` with them. Full contract, worked example, and boundary rules:
+development-guide `references/world-pack.md` "Systems".
 
 ## Prompts
 
@@ -189,7 +227,17 @@ Tool agents need explicit tools and often an extension:
 
 Use subagents for cognition isolation and continuity. Do not use them for calculations or direct state writes.
 
-Lore lookup is not automatically injected into subagents. Give `lookup, read_lore` only to research/director tool agents that need fixed canon. Avoid giving role agents secret lore unless that character should know it.
+Subagents run as fresh child processes that do not load the main process's
+extensions, so GM-surface tools (`lookup`, `read_lore`, `get_status`, memory
+tools) do not exist there — listing them in `tools` does nothing, because
+unknown names in the allowlist are ignored. A subagent's `tools` can only
+enable pi built-ins plus tools registered by that subagent's own `extension`
+(role agents additionally get the injected `recall_self` / `remember_action`).
+When a research/director agent needs fixed canon, either put the relevant
+canon into its task brief, or ship a world-local child extension exposing a
+narrow lookup tool (the border-station `npc-generator` extension is the
+pattern). Do not put secret lore into a role agent's brief unless that
+character should know it.
 
 Role prompts are character documents, not analyst briefs. Write them as:
 
@@ -273,7 +321,7 @@ Only change `src/` when module configuration cannot express the behavior. Common
 - new world-local tool support;
 - stricter state schema or migration;
 - private hidden state/reveal ledger;
-- combat/economy/inventory/quest systems;
+- combat/economy/inventory/quest capabilities the System module contract cannot express (world-local System modules are the first home — see Systems);
 - prompt template markers;
 - additional writer/revision behavior.
 

@@ -13,9 +13,11 @@ import { applySubagentSettings, readSubagentSettings } from "./subagent-settings
 // Discipline this enforces: each subagent's `tools` becomes pi-subagents'
 // `--tools` allowlist (least privilege) and `extension` becomes
 // `subagentOnlyExtensions` (world-specific tools loaded ONLY inside the spawned
-// child, never on the GM's own tool surface). Fixed-lore tools follow the same
-// rule: a subagent sees `lookup` / `read_lore` only when its spec explicitly
-// lists them in `tools`.
+// child, never on the GM's own tool surface). Note the child never loads the
+// main process's `-e` extensions, so GM-surface tools (`lookup` / `read_lore` /
+// `get_status`) do not exist there at all — allowlisting them is a no-op. A
+// child's real surface is pi built-ins ∩ allowlist, plus its own extension's
+// tools (and, for roles, the injected role-runtime pair).
 
 /** Frontmatter marker identifying a file this loader generated. Hand-authored
  * agents (e.g. `.pi/agents/writer.md`) lack it and are never touched. It sits on

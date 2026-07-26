@@ -395,7 +395,7 @@ export const rollWeatherTool: ToolDefinition<WeatherResult> = {
 
 子代理是 GM 可以委派的独立子进程（底座用 `pi-subagents` 运行），跑在自己的工具白名单里（最小权限）。启动时底座把每个声明**物化**成 `.pi/agents/<name>.md`，GM 通过内置 `subagent` 工具按名委派。世界包只声明，不写注册代码。
 
-固定资料工具不会自动注入所有子代理。需要核对世界设定的研究型/导演型子代理，可以在 `tools` 白名单显式写 `lookup, read_lore`；长期扮演型 role 子代理默认不要给 secret lore，避免角色知道不该知道的秘密。
+子代理子进程不加载主进程的 `-e` 扩展：`lookup`/`read_lore`/`get_status` 这类 GM 工具面在子进程里根本不存在，写进 `tools` 白名单也不会生效（白名单里未注册的工具名会被忽略）。`tools` 只能放行 pi 内建工具与该子代理自己 `extension` 注册的工具（role 型另有自动注入的 `recall_self`/`remember_action`）。研究型/导演型子代理需要固定设定时：要么由 GM 在 task 简报里带上所需资料，要么给它配一个世界本地子代理扩展注册窄查询工具（参照 border-station `npc-generator` 的 extension 模式）。长期扮演型 role 子代理默认不要给 secret lore，避免角色知道不该知道的秘密。
 
 分两类，`kind` 字段区分（缺省 `tool`）：
 

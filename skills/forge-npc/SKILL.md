@@ -25,6 +25,15 @@ description: When the story introduces a new named character that must be rememb
 - `agent` 设为 `npc-generator`。
 - `task` 写清这个角色的线索、登场场合与在剧情中的作用（例如：“驿站后厨出现一名压低嗓音打听密信下落的行脚商，可能是信使的旧识，需要一个可复现的具名角色”）。
 
-子代理会在独立子进程里产出角色设定，并调用 `forge_character` 把它写进**当前存档**的 characters 记忆；它返回后，你据此在正文里让该角色自然登场。
+子代理会在独立子进程里产出角色设定，并调用 `forge_character` 提交到**当前存档**的 characters 记忆。落库是**异步提取**：提交成功只代表任务入队（返回 task id），真正写入常需几分钟；子代理返回后你即可据此在正文里让该角色自然登场，不必等提取完成，但也不要立刻用 `search_memory` 找它并因查不到而重复 forge。
 
 > forge_character 只在该子代理的子进程里可用（最小权限隔离），你自己的工具面上没有它——你通过委派 `npc-generator` 来间接落库，而不是直接写记忆。
+
+## 验证落库（排查用，只读）
+
+```bash
+node scripts/ov-inspect.ts --save <saveId> --task <taskId>    # 提取任务状态
+node scripts/ov-inspect.ts --save <saveId> --query <角色名>   # completed 后搜记忆确认
+```
+
+saveId 用 `/save` 查看；taskId 在 forge_character 的返回文本里。

@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { filterGmContextMessages } from "../src/runtime/context-filter.ts";
 import { getRuntimeInfrastructure } from "../src/runtime/bootstrap.ts";
@@ -42,6 +43,20 @@ export type GmContextAssemblyInput = {
 
 export function gmPromptPathsForResources(world: Pick<LoadedWorld, "gmPromptPaths" | "promptTemplates">): string[] {
   return world.promptTemplates.gm === undefined ? world.gmPromptPaths : [];
+}
+
+/** Every skill under skills/ (a dir with a SKILL.md), sorted. Enumerated from
+ * disk so this stays the same set `start.sh --skill ./skills/` loads — a
+ * hardcoded list here silently drifted to 3 of 5 skills once already. */
+export function listSkillPaths(projectRoot: string): string[] {
+  const skillsDir = join(projectRoot, "skills");
+  if (!existsSync(skillsDir)) {
+    return [];
+  }
+  return readdirSync(skillsDir)
+    .filter((entry) => existsSync(join(skillsDir, entry, "SKILL.md")))
+    .sort()
+    .map((entry) => join(skillsDir, entry));
 }
 
 export function assembleGmContextMessages(input: GmContextAssemblyInput): RuntimeMessage[] {
@@ -108,11 +123,7 @@ export function activate(pi: PiLike): void {
   // GM prompts come from the active world pack, not a hardcoded path — this is
   // the seam that lets swapping worlds swap the GM persona.
   pi.on("resources_discover", () => ({
-    skillPaths: [
-      join(projectRoot, "skills", "start-game"),
-      join(projectRoot, "skills", "development-guide"),
-      join(projectRoot, "skills", "forge-npc")
-    ],
+    skillPaths: listSkillPaths(projectRoot),
     // A GM prompt template owns the complete context assembly, including any
     // literal system guidance; the legacy gmPromptPaths system injection remains
     // only for worlds without a template.

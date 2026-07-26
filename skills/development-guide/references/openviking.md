@@ -130,19 +130,21 @@ npm run typecheck
 npm test
 ```
 
-Validate schema parsing against local OV:
+Validate schema parsing against local OV (wraps the `MemoryTypeRegistry` load
+the OV server itself performs; asserts every schema file's declared
+`memory_type` registers):
 
 ```bash
-export OPENVIKING_PYTHON="/absolute/path/to/openviking/python"
-"$OPENVIKING_PYTHON" - <<'PY'
-from openviking.session.memory.memory_type_registry import MemoryTypeRegistry
-registry = MemoryTypeRegistry(load_schemas=False)
-# Replace with the active world's memory schema directory.
-loaded = registry.load_from_directory('worlds/border-station/memory')
-print({'loaded': loaded, 'names': registry.list_names(include_disabled=True)})
-assert registry.get('characters')
-assert registry.get('story_events')
-PY
+bash scripts/validate-memory-schemas.sh <world-slug>
+```
+
+The script uses `$OPENVIKING_PYTHON` when set, else derives the interpreter
+from `openviking-server` on PATH.
+
+Inspect a save's memories read-only (post-forge verification, task polling):
+
+```bash
+node scripts/ov-inspect.ts --save <saveId> --query <text> [--task <taskId>] [--read <uri>]
 ```
 
 Run live validation only when a real OV server is reachable:

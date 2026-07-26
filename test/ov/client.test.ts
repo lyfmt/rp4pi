@@ -260,6 +260,18 @@ test("find and read parse OpenViking responses", async () => {
   assert.equal(markdown, "# Ari\n");
 });
 
+test("read supports OV 0.4.x payloads that return content as the result string", async () => {
+  // Live 0.4.x servers answer content/read with `result` as the file content
+  // itself; reading `.content` off that string used to yield "" for every
+  // memory file (read_memory looked permanently empty).
+  const client = createOpenVikingClient(
+    { baseUrl: "https://ov.example.test", apiKey: "secret", account: "acct", user: "save-user" },
+    async () => jsonResponse({ status: "ok", result: "Summary: 边关信使递交密信。" })
+  );
+
+  assert.equal(await client.read("viking://user/save-1/memories/story.md"), "Summary: 边关信使递交密信。");
+});
+
 test("OpenViking client can derive a save-scoped user client", async () => {
   const calls: FetchCall[] = [];
   const client = createOpenVikingClient(
