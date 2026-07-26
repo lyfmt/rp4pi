@@ -30,10 +30,12 @@ test("smoke-demo wrapper still runs project checks before live smoke", () => {
   assert.match(wrapper, /smoke-demo-live\.sh/);
 });
 
-test("smoke-demo live core waits up to 120 seconds for OpenViking memory extraction", () => {
+test("smoke-demo live core waits a configurable window for OpenViking memory extraction", () => {
   const script = readFileSync(smokeDemoLiveScript, "utf8");
 
-  assert.match(script, /for \(let attempt = 0; attempt < 120; attempt \+= 1\)/);
+  // glm 级推理提取动辄数分钟：默认 360s，可用 RP_OV_SMOKE_TIMEOUT_SECONDS 覆盖。
+  assert.match(script, /RP_OV_SMOKE_TIMEOUT_SECONDS \?\? 360/);
+  assert.match(script, /for \(let attempt = 0; attempt < maxAttempts; attempt \+= 1\)/);
 });
 
 test("smoke-demo live core still verifies extracted OpenViking memories", () => {

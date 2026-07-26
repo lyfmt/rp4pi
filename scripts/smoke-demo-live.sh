@@ -46,8 +46,11 @@ const taskHeaders = {
   "X-OpenViking-User": userSpaceForSave(save.id)
 };
 
+// glm 级推理模型做记忆提取动辄 2~5 分钟（含上游 503 重试），120s 窗口会把
+// "仍在运行" 误判成失败；默认放宽到 6 分钟，可用 RP_OV_SMOKE_TIMEOUT_SECONDS 覆盖。
+const maxAttempts = Number(process.env.RP_OV_SMOKE_TIMEOUT_SECONDS ?? 360);
 let task;
-for (let attempt = 0; attempt < 120; attempt += 1) {
+for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
   const response = await fetch(
     `${baseUrl}/api/v1/tasks?task_type=session_commit&resource_id=${encodeURIComponent(sessionId)}&limit=1`,
     {

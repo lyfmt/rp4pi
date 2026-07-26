@@ -80,10 +80,13 @@ try {
     throw new Error("OpenViking append reached no ov_session_bindings row");
   }
 
+  // turn_snapshots 存的是 story-snapshot envelope（{core:{payload},systems,...}），
+  // 核心状态在 core.payload 里；latest_states 才是扁平核心状态。
   const snapshot = JSON.parse(snapshotRow.state_json);
+  const snapshotCore = snapshot.core?.payload ?? snapshot;
   const latest = JSON.parse(latestRow.state_json);
-  if (latest.time?.hour !== snapshot.time?.hour + 1) {
-    throw new Error(`clock-drift did not advance latest state: snapshot=${snapshot.time?.hour}, latest=${latest.time?.hour}`);
+  if (latest.time?.hour !== snapshotCore.time?.hour + 1) {
+    throw new Error(`clock-drift did not advance latest state: snapshot=${snapshotCore.time?.hour}, latest=${latest.time?.hour}`);
   }
 } finally {
   db.close();

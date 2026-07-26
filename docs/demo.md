@@ -89,3 +89,4 @@ OpenViking 配置执行一次真实 append + commit，并轮询后台 task，确
 
 - `bash scripts/smoke-demo.sh`：无 OpenViking 或服务不可达时输出 `SKIP live OpenViking smoke...` 并返回 0；可达时继续做 health、append+commit、task poll、memory extraction 的严格 live 校验。
 - `bash scripts/smoke-writer-live.sh`：使用当前 `start.sh` 和 `.pi/agent/settings.json` 跑一次隔离真实回合，GM 与 writer 使用同一套当前主模型配置。设置 `RP_WRITER_LIVE_SMOKE=0` 时输出 `SKIP live writer smoke...` 并返回 0。
+- `bash scripts/smoke-two-turn-live.sh`：同一会话连发两条输入的双回合真实冒烟，额外验证第二回合 writer history 回放、快照序号递增与逐回合 clock-drift；也是连发输入排水（story commit 在下一条输入前落盘）的回归测试。同样受 `RP_WRITER_LIVE_SMOKE=0` 跳过控制。

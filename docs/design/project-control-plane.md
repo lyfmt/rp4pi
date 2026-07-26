@@ -13,6 +13,7 @@
 | 状态 | player、time、scene、attributes、facts、relationships | `get_status` 与窄粒度 `update_*` |
 | System 扩展 | registry、namespaced state、activation/migration、transaction runtime、`commit_turn`、GM/Writer projection、`relay-blueprints` 生成 probe | `defineSystem()`、`commit_turn`、`get_status`、全量 story snapshot 与 `/roll` |
 | Writer | direction packet、写作指导、初稿、风格增强、惯性与套话审查、有限重写 | `submit_direction_packet` |
+| 渲染 | 回合活动挂件（阶段动画、writer/修订流式正文预览、记忆沉淀动态图标）+ 单行 working label；正文经 idle 投递；在途 story commit（投递→snapshot→turn_committed hook→OV 沉淀）在下一条输入与 session 关闭前强制排空 | `turn-activity-widget.ts`、`story-commit-tracker.ts`（`input` / `session_shutdown` 排水） |
 | 存档 | save、session binding、latest state、最近 2 个完整确定性 story snapshot | `/save`、`/load`、`/roll` |
 | 角色 | 世界角色、动态角色、角色轨迹 | GM 调用 `subagent`；runtime 不自动调度 |
 | Hook | session_start、turn_start、turn_committed | inject、state、delegate |
@@ -26,10 +27,11 @@
 -> GM 按提示调用角色子代理并去除矛盾
 -> GM 调用窄粒度 update_* 更新 Core，并按需多次调用 commit_turn 原子推进 System state
 -> GM 调用 submit_direction_packet
--> Writer 生成、审查并修订正文
+-> Writer 生成、审查并修订正文（草稿与修订阶段流式预览到回合活动挂件）
 -> Pi 接受正文投递
 -> runtime 为 Core 与全部 System state 记录 story snapshot
 -> Hook 与 OpenViking 处理后续工作
+-> 在途 story commit 由排水点兜底（下一条输入前、session 关闭前），避免单发模式与连发输入丢投递
 ```
 
 ## 目标实现
