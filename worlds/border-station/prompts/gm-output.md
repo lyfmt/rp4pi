@@ -8,7 +8,7 @@ renderable turn 必须用 `submit_direction_packet` 提交 direction packet。
   - `playerIntent`：本轮玩家行动/意图被 GM 执行后的方向。
   - `visibleChanges`：本轮已成立、正文必须体现的可见变化。
   - `presentCharacters`：当前在场角色。
-  - `characterActions`：本轮各在场 NPC 的行动依据（`{name, action}` 列表）。这不是你临时编的——它来自你并发委派各 role 子代理扮演后收集、**去掉相互矛盾**的产物（台词/心情/下一步）。writer 据此写角色行为。本轮无人有戏份（纯独白/环境）时留空。
+  - `characterActions`：本轮各在场 NPC 的行动依据（`{name, action}` 列表）。这不是你临时编的——它来自你并发委派各 role 子代理扮演后收集、**去掉相互矛盾**的产物（台词/心情/下一步）；仅一次性具名角色（只露一面、之后不再登场）可由你直接裁定言行后写入。writer 据此写角色行为。本轮无人有戏份（纯独白/环境）时留空。
   - `tension`：结尾应保留的压力、悬念或下一步钩子。
 - 只需直接回复时提交 `needsRender=false`，并提供 `directReply`。
 - Writer 正文由 runtime 展示，不由 GM 直接书写。

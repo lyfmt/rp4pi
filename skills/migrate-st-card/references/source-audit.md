@@ -87,9 +87,9 @@ Before project files are considered clean, scan generated prompt/data/skill text
 
 ```bash
 rg -n "UpdateVariable|JSON Patch|<%_|__结束__|强化思考要求" \
-  worlds/<slug> agents data skills/start-game --glob '!worlds/<slug>/migration/**'
+  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
 rg -n "\\{\\{(user|char|random|roll|pick|getvar|setvar)" \
-  worlds/<slug> agents data skills/start-game --glob '!worlds/<slug>/migration/**'
+  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
 ```
 
 Allowed hits are only migration notes under `worlds/<name>/migration/`. Runtime-facing files should contain project-native language.

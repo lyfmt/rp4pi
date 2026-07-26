@@ -1,8 +1,0 @@
-{
-  "name": "rp-gm",
-  "prompts": [
-    "agents/gm-core.md",
-    "agents/gm-tools.md",
-    "agents/gm-output.md"
-  ]
-}

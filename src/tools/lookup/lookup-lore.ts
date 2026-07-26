@@ -1,4 +1,5 @@
 import { formatLoreLookupResults, searchLore } from "../../lore/search.ts";
+import { listLoreKinds } from "../../lore/sqlite.ts";
 import type { ToolDefinition } from "../../types/pi.ts";
 import { ok, type ToolResult } from "../runtime/result.ts";
 import { requireStateToolContext } from "../state/context.ts";
@@ -12,7 +13,10 @@ export const lookupLoreTool: ToolDefinition<ToolResult> = {
     required: ["query"],
     properties: {
       query: { type: "string", description: "要查证的世界设定关键词或问题。" },
-      kind: { type: "string", description: "用于限定查询范围的资料类型。" },
+      kind: {
+        type: "string",
+        description: "用于限定查询范围的资料类型，须是本世界资料实际存在的 kind；类型不存在时会返回可用类型列表。不确定时省略。"
+      },
       limit: { type: "integer", description: "返回条数上限，默认 5。" }
     }
   },
@@ -20,6 +24,17 @@ export const lookupLoreTool: ToolDefinition<ToolResult> = {
     const parsed = parseLookupInput(params);
     const toolContext = requireStateToolContext(ctx);
     const worldName = requireWorldName(toolContext.worldName);
+    // kind 拼错时不能与"确无资料"同一句话：显式报未知类型并列出可用取值，
+    // 否则模型会拿着假阴性盲目重试或换错工具。
+    if (parsed.kind !== undefined) {
+      const kinds = listLoreKinds(toolContext.db, worldName);
+      if (!kinds.includes(parsed.kind)) {
+        const available = kinds.length > 0 ? kinds.join(" | ") : "（本世界没有固定资料）";
+        return ok(`未知资料类型 kind="${parsed.kind}"。本世界可用类型：${available}。省略 kind 可在全部资料中检索。`, {
+          results: []
+        });
+      }
+    }
     const results = searchLore(toolContext.db, worldName, parsed);
     return ok(formatLoreLookupResults(results), { results });
   }

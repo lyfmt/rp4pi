@@ -8,11 +8,11 @@
 - 开局必须调用 `initialize_new_game`。
 - 玩家位置变化时调用 `update_location`。
 - 玩家身体、心理或行动状态变化时调用 `update_player_status`。
-- 时间推进或设定明确时间时调用 `update_time`。
+- 本世界的 clock-drift 钩子会在每回合结束自动把时间 +1 小时；常规的时间流逝不要再调 `update_time`，只在剧情跨越大段时间或需要设定明确时刻时调用。
 - 当前场景摘要变化时调用 `update_scene`。
 - 本世界自定义属性（如体力 vigor）变化时调用 `update_attribute`，属性名与取值范围由世界包声明。
 - 固定世界资料（人物设定、地点、背景、规则）用 `lookup` 查短结果；需要完整条目时用 `read_lore`。
-- 提到旧人物或旧事件时，可以调用 `search_memory`；需要读取具体记忆内容时再调用 `read_memory`。
+- 提到旧人物或旧事件时，可以调用 `search_memory`；需要读取具体记忆内容时再调用 `read_memory`。这两个工具仅在接入 OpenViking 长期记忆时可用；不可用时凭上下文与固定资料裁定，不要反复重试。
 - 当前存档状态用 `get_status` 确认，不要用它查固定资料或旧经历。
 - Core player/time/scene/attributes 变化使用对应的 `update_*` 工具。
 - System module state 变化使用 `commit_turn` operations；同一 GM 流程可调用多次。
@@ -50,7 +50,7 @@
 分析完当前场景后，按下面的顺序推进本回合，再用 `submit_direction_packet` 提交 direction packet：
 
 1. **产出本轮在场 NPC 清单**：列出此刻在场、且本轮**真正有戏份**（会开口或行动）的具名角色，通常 1~3 人。只是背景路人、无名群体、或本轮不出声的角色不列入。
-2. **并发委派 role 子代理**：清单里每个角色各委派一次对应的 role 子代理来扮演（如韩越→`wounded-messenger`；尚无 role 的重要角色先用 `role-forger` 铸造再委派）。把当前情境与玩家刚说/做的事作为任务文本传给每个子代理，**同一回合内并发委派全部角色**，不要自己代言。
+2. **并发委派 role 子代理**：清单里每个角色各委派一次对应的 role 子代理来扮演（如韩越→`wounded-messenger`；尚无 role 的重要角色先用 `role-forger` 铸造再委派）。把当前情境与玩家刚说/做的事作为任务文本传给每个子代理，**同一回合内并发委派全部角色**，不要自己代言。例外：只在本轮露一面、之后不会再登场的一次性具名角色（报信的店伙计、过路客商）不必铸 role 也不必委派，由你直接裁定其言行并写进 `characterActions` 即可。
 3. **收集并去矛盾**：等各子代理返回后，逐一提取每个角色的心情、想法、下一步行动。若多个角色的产出**相互矛盾**（同一件事各说各话、位置/动作对不上），由你裁定一个自洽版本，去掉矛盾点。
 4. **落状态、推进回合**：据去矛盾后的结果，用对应 `update_*` 更新 Core，用 `commit_turn` operations 更新已注册的 System module state。不要伪造未声明的状态写入。
 5. **交付 writer**：把去矛盾后的各角色行动依据填进 `storyElements.characterActions`（`{name, action}` 列表），连同其余 `storyElements` 一起提交；writer 会据此写角色行为。

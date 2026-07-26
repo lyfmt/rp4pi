@@ -28,7 +28,7 @@ export type DirectionPacket =
 
 export function parseDirectionPacket(value: unknown): DirectionPacket {
   if (!isRecord(value)) {
-    throw new TypeError("导演包需要对象 { storyElements, needsRender, directReply }。");
+    throw new TypeError("导演包需要对象 { needsRender, storyElements 或 directReply }。");
   }
 
   // 入口宽：模型常把 needsRender 写成 "true"/"false"，把要素写成数字。归一化后

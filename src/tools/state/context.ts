@@ -48,10 +48,6 @@ export function requireStateToolContext(context: unknown): StateToolContext {
     throw new TypeError("状态工具上下文非法：piSessionId 必须是字符串。");
   }
 
-  if ("piSessionId" in context && context.piSessionId !== undefined && typeof context.piSessionId !== "string") {
-    throw new TypeError("Invalid state tool context");
-  }
-
   if ("worldName" in context && context.worldName !== undefined && typeof context.worldName !== "string") {
     throw new TypeError("状态工具上下文非法：worldName 必须是字符串。");
   }

@@ -422,7 +422,8 @@ test("extension surfaces OpenViking append failures as memory error messages", a
     assert.equal(sentMessages[0]?.customType, "writer-prose");
     assert.deepEqual(sentMessages[0]?.options, { triggerTurn: false });
     assert.equal(sentMessages[1]?.customType, "openviking-memory-error");
-    assert.equal(sentMessages[1]?.content, "OpenViking memory append failed: OV refused connection");
+    assert.match(String(sentMessages[1]?.content), /^OpenViking memory append failed: OV refused connection\n/);
+    assert.match(String(sentMessages[1]?.content), /RP_DISABLE_OPENVIKING=1/);
     assert.equal(sentMessages[1]?.details?.kind, "openviking-memory-error");
     assert.deepEqual(sentMessages[1]?.options, { triggerTurn: false });
     // Memory sedimentation is widget-owned: it must never reach the working
@@ -735,11 +736,14 @@ test("extension registers a styled renderer for OpenViking memory errors", () =>
 
   assert.equal(rendererType, "openviking-memory-error");
   assert.equal(typeof (rendered as { render?: unknown })?.render, "function");
-  assert.deepEqual((rendered as { render(width: number): string[] }).render(80), [
+  const renderedLines = (rendered as { render(width: number): string[] }).render(80);
+  assert.deepEqual(renderedLines.slice(0, 3), [
     "⚠ OpenViking memory append failed",
     "save: save-1",
     "reason: OV refused connection"
   ]);
+  assert.match(String(renderedLines[3]), /^hint: /);
+  assert.match(String(renderedLines[3]), /RP_DISABLE_OPENVIKING=1/);
 });
 
 test("extension registers memory lookup tools from default OpenViking config", () => {

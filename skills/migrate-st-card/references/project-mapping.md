@@ -42,7 +42,7 @@ worlds/<slug>/
 | periodic drift/background pressure | `hooks.yaml` |
 | NPC continuity | `subagents.yaml` role agents |
 | new NPC/role creation | tool subagents such as `npc-generator` or `role-forger` |
-| complex mechanics | source-code implementation plan using `development-guide` |
+| complex mechanics (affinity/HP/economy/combat rules) | world-local System module: `worlds/<slug>/systems/*.ts` with `defineSystem()`, listed in `world.yaml` `systems:`; GM advances it via `commit_turn` operations (see `development-guide` world-pack "Systems"). Only fall back to a `src/` implementation plan when a capability the System contract lacks is required |
 
 ## Prompt Mapping
 
@@ -98,10 +98,10 @@ Use subagents for cognition boundaries, not for arithmetic or generic quality.
 | Need | Form |
 |---|---|
 | Persistent named NPC voice | `kind: role` |
-| Generate and remember a new NPC | `kind: tool` with `forge_character` |
-| Create a new persistent role during play | `kind: tool` with `forge_role` |
+| Generate and remember a new NPC | `kind: tool` with a world-local extension (`forge_character` is a border-station example, not a base tool — each world declares its own in `subagents.yaml`; loader defers extension validation, so a missing module only fails at GM delegation time) |
+| Create a new persistent role during play | `kind: tool` with base-platform `forge_role` |
 | Secret/faction perspective | role or tool subagent with filtered task context |
-| Combat/economy/rules calculation | not subagent; implement tools/reducers |
+| Combat/economy/rules calculation | not subagent; System module (`defineSystem` + `commit_turn`) or world-local tools |
 
 Subagent output is input to GM. GM still owns deterministic state changes
 through the existing `update_*` tools and owns direction packets through
@@ -121,9 +121,9 @@ Run ST residue scans:
 
 ```bash
 rg -n "UpdateVariable|JSON Patch|<%_|__结束__|强化思考要求" \
-  worlds/<slug> agents data skills/start-game --glob '!worlds/<slug>/migration/**'
+  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
 rg -n "\\{\\{(user|char|random|roll|pick|getvar|setvar)" \
-  worlds/<slug> agents data skills/start-game --glob '!worlds/<slug>/migration/**'
+  worlds/<slug> data skills/start-game --glob '!worlds/<slug>/migration/**'
 ```
 
 Expected runtime-facing result: no hits outside migration notes.

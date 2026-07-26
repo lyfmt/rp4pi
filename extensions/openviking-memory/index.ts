@@ -4,7 +4,7 @@ import { onTurnRendered } from "../../src/runtime/turn-events.ts";
 import { drainStoryCommits } from "../../src/runtime/story-commit-tracker.ts";
 import { emitLiveProgress } from "../../src/runtime/live-progress.ts";
 import { deliverWhenIdle, runtimeMessageToOutbound } from "../../src/runtime/idle-delivery.ts";
-import { createOpenVikingMemoryErrorMessage } from "../../src/runtime/prose-message.ts";
+import { createOpenVikingMemoryErrorMessage, OPENVIKING_MEMORY_ERROR_HINT } from "../../src/runtime/prose-message.ts";
 import { createTextComponent } from "../../src/runtime/tui-text-component.ts";
 import { appendTurnToMemory } from "../../src/ov/turn-memory-hook.ts";
 import { watchMemoryExtraction, type ExtractionWatchHandle } from "../../src/ov/extraction-watch.ts";
@@ -129,7 +129,8 @@ function registerMemoryErrorRenderer(pi: PiLike): void {
       [
         "⚠ OpenViking memory append failed",
         `save: ${readString(details.saveId)}`,
-        `reason: ${readString(details.error) || readString((message as { content?: unknown }).content)}`
+        `reason: ${readString(details.error) || readString((message as { content?: unknown }).content)}`,
+        `hint: ${OPENVIKING_MEMORY_ERROR_HINT}`
       ].join("\n")
     );
   });

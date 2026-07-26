@@ -107,6 +107,14 @@ export function getLoreEntry(db: RpDatabase, worldName: string, id: string): Lor
   return hydrateLoreEntry(db, worldName, row);
 }
 
+/** Distinct lore kinds present for a world; drives lookup's kind validation. */
+export function listLoreKinds(db: RpDatabase, worldName: string): string[] {
+  const rows = db
+    .prepare("SELECT DISTINCT kind FROM lore_entries WHERE world_name = ? ORDER BY kind")
+    .all(worldName) as Array<{ kind: string }>;
+  return rows.map((row) => row.kind);
+}
+
 export function listLoreEntries(db: RpDatabase, worldName: string): LoreEntry[] {
   const rows = db.prepare("SELECT * FROM lore_entries WHERE world_name = ? ORDER BY kind, name, id").all(worldName) as LoreEntryRow[];
   return rows.map((row) => hydrateLoreEntry(db, worldName, row));

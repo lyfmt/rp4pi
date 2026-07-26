@@ -62,13 +62,18 @@ export function createHookNoticeMessage(hook: string, text: string): HookNoticeM
   };
 }
 
+/** 排障提示随错误一起出现：新用户（cp .env.example .env 之外的配置）最常见的
+ * 出路是禁用 OV 或修 OPENVIKING_URL，不该让他们从原始 fetch 错误里自己猜。 */
+export const OPENVIKING_MEMORY_ERROR_HINT =
+  "长期记忆不可用不影响本局继续。暂不需要记忆可在 .env 设 RP_DISABLE_OPENVIKING=1（.env.example 默认如此）；需要则检查 OPENVIKING_URL 与 OpenViking 服务是否可达。";
+
 export function createOpenVikingMemoryErrorMessage(saveId: string, error: unknown): OpenVikingMemoryErrorMessage {
   const message = error instanceof Error ? error.message : String(error);
   return {
     role: "assistant",
     type: "custom",
     source: "openviking-memory-error",
-    content: `OpenViking memory append failed: ${message}`,
+    content: `OpenViking memory append failed: ${message}\n${OPENVIKING_MEMORY_ERROR_HINT}`,
     data: { saveId, error: message }
   };
 }

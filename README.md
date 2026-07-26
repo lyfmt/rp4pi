@@ -72,13 +72,14 @@ OpenViking 连接参数可写入本地 `.env`：
 | `OPENVIKING_API_KEY` | 空 | API Key |
 | `OPENVIKING_ACCOUNT` | 空 | 账户隔离标识 |
 
+这三项也可写在 `.pi/agent/settings.json` 的 `openViking` 字段（`url` / `apiKey` / `account`）。两处同时存在时以 `.env` / 环境变量优先，`settings.json` 仅作回退。
+
 其他常用运行参数通过环境变量传入：
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
 | `RP_WORLD` | 首个非 `_` 开头的世界目录 | 选择 `worlds/<name>/` |
 | `RP_SQLITE_PATH` | `data/rp.sqlite` | SQLite 状态文件位置 |
-| `RP_DEMO_MODE` | `1` | 设为 `0` 关闭 demo mode |
 | `RP_DISABLE_OPENVIKING` | `1`（`.env.example` 默认设置） | 设为 `1` 禁用长期记忆连接；启用 OpenViking 时注释掉 `.env` 里的该行 |
 | `RP_AGENT_ENV_FILE` | `.env` | 指定 OpenViking 环境配置文件 |
 
@@ -128,7 +129,7 @@ bash scripts/smoke-writer-live.sh
 | `extensions/` | Pi 扩展入口 |
 | `src/` | 运行时、状态、工具、命令、System 与 OpenViking 集成 |
 | `worlds/` | 世界包模板和可运行示例 |
-| `agents/`、`.pi/agents/` | GM 与 Writer 提示词 |
+| `.pi/agents/` | Writer 提示词与启动时物化的世界子代理（role 与 tool 两类；GM 提示词在各世界包 `prompts/` 下） |
 | `skills/` | 启动、开发、角色生成和迁移技能 |
 | `test/` | 单元、契约和端到端测试 |
 | `docs/design/project-control-plane.md` | 当前实现、约束和里程碑的权威说明 |

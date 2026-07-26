@@ -32,6 +32,27 @@ test("lookup searches fixed lore for the active world", () => {
   }
 });
 
+test("lookup rejects an unknown kind with the available kinds instead of a false negative", () => {
+  const harness = withLoreHarness();
+  try {
+    const result = lookupLoreTool.execute(
+      "c1",
+      { query: "聚灵丹", kind: "medcine" },
+      undefined,
+      undefined,
+      harness.ctx as never
+    ) as ToolResult;
+
+    const text = resultText(result);
+    assert.match(text, /未知资料类型 kind="medcine"/);
+    assert.match(text, /medicine/);
+    assert.doesNotMatch(text, /没有找到固定资料/);
+    assert.deepEqual(result.details.results, []);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("read_lore returns full fixed lore by id", () => {
   const harness = withLoreHarness();
   try {

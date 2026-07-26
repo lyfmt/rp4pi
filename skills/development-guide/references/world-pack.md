@@ -284,12 +284,12 @@ sources:
 
 ```yaml
 tools:
-include:
-  - core.state
-  - core.memory
-  - core.lookup
-extra:
-  - ./tools/local-tool.ts
+  include:
+    - core.state
+    - core.memory
+    - core.lookup
+  extra:
+    - ./tools/local-tool.ts
 ```
 
 | 字段 | 含义 |

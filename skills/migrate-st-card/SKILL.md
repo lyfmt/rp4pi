@@ -29,10 +29,10 @@ ST card -> semantic audit -> card IR -> runtime/world plan -> worlds/<name>/ mod
    Read `references/ir-and-runtime-plan.md` for required IR blocks: persona, setting facts, openings, mutable concepts, mechanics, visibility facts, worldbook disposition, script findings, style, and discarded ST patches.
 
 4. Draft `worlds/<slug>/migration/runtime-plan.md`.
-   Decide which parts become state attributes, memory schemas, GM prompts, writing guides, hooks, tools, role subagents, or source-code work.
+   Decide which parts become state attributes, System modules, memory schemas, GM prompts, writing guides, hooks, tools, role subagents, or source-code work.
 
 5. Hand off to `$build-rp-agent`.
-   Use that skill to create or edit the actual world pack. If a mechanic needs a reducer/tool not present in this scaffold, stop at a clear implementation plan instead of hiding the rule in prompt prose.
+   Use that skill to create or edit the actual world pack. Complex mechanics have a project-native home first: a world-local System module (`defineSystem()` + `commit_turn`). Only if a mechanic needs a capability the System contract lacks, stop at a clear implementation plan instead of hiding the rule in prompt prose.
 
 6. Verify no ST residue remains.
    Run the checks in `references/project-mapping.md` before claiming the migration is complete.

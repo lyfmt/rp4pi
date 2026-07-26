@@ -31,10 +31,10 @@ Do not copy variable names as state fields by default. Name the domain concept f
 
 | ST Signal | Domain Concept | Likely Home |
 |---|---|---|
-| affection, trust, suspicion | relationship state | tool/reducer plan or memory note; simple public meter can be attribute |
-| money, debt, price | economy | implementation plan unless simple attribute is enough |
-| HP, SAN, wounds, curse | condition/combat | implementation plan for complex rules; simple status may use attribute |
-| inventory, equipment | inventory | acquired/current possessions need state or implementation plan; fixed item catalog belongs in lore; remembered mentions may use memory |
+| affection, trust, suspicion | relationship state | System module for rule-driven changes, or memory note; simple public meter can be attribute |
+| money, debt, price | economy | System module unless simple attribute is enough |
+| HP, SAN, wounds, curse | condition/combat | System module for complex rules; simple status may use attribute |
+| inventory, equipment | inventory | acquired/current possessions need state (attributes or a System module); fixed item catalog belongs in lore; remembered mentions may use memory |
 | time, location, scene | scene-turn | built-in `time`, `player.location`, `scene.summary` |
 | route, quest, chapter | quest/route | attribute, hook, prompt setup, or implementation plan |
 | secret identity, culprit, hidden motive | secret | hidden prompt/subagent boundary; never public memory |
@@ -70,6 +70,7 @@ Premise
 Complexity decision
 Selected modules
 State roots and attributes
+System modules
 Memory policy and schemas
 Lore sources
 Prompt modules
@@ -90,8 +91,8 @@ Validation plan
 | Time drift, background beats, periodic pressure | hooks |
 | Long-term character/event recall | OpenViking memory schemas |
 | Persistent named character voice | role subagent |
-| New character generation during play | tool subagent with `forge_role` or `forge_character` |
-| Complex formulas, combat, economy, inventory, quest ledger, secret ledger | implementation plan before runtime edits |
+| New character generation during play | tool subagent with base-platform `forge_role`, or a world-local extension like border-station's `forge_character` |
+| Complex formulas, combat, economy, inventory, quest ledger, secret ledger | world-local System module (`worlds/<slug>/systems/*.ts` with `defineSystem()`, advanced via `commit_turn`); a `src/` implementation plan only when a capability the System contract lacks is required |
 
 Do not mark a complex mechanic complete just because it appears in GM instructions. If the system must be queried reliably or audited later, it needs state-backed support.
 
