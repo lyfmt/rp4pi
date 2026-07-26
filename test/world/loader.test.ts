@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -76,6 +76,18 @@ test("the shipped _template world pack parses", () => {
   assert.equal(template.name, "_template");
   assert.ok(template.gmPromptPaths.length >= 1);
   assert.ok(template.attributes.some((a) => a.name === "energy"));
+});
+
+test("every world pack under worlds/ loads", () => {
+  // Guards future packs: a new world directory must parse under the full
+  // manifest contract, not just the two specimens named in other tests.
+  const worldsBase = join(repoRoot, "worlds");
+  const entries = readdirSync(worldsBase).filter((entry) => statSync(join(worldsBase, entry)).isDirectory());
+  assert.ok(entries.length >= 2);
+  for (const entry of entries) {
+    const world = loadWorldFromDir(join(worldsBase, entry));
+    assert.equal(world.root, join(worldsBase, entry));
+  }
 });
 
 test("loads a world whose sections are external yaml modules", () => {
@@ -184,6 +196,176 @@ test("missing required field fails validation with a named message", () => {
     mkdirSync(join(root, "memory"), { recursive: true });
     writeFileSync(join(root, "world.yaml"), "name: broken\nstate:\n  initial: {}\n");
     assert.throws(() => loadWorldFromDir(root), /state.initial.player|state.initial.time/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("manifest validation errors name the world directory", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    const root = join(dir, "broken");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "world.yaml"), "name: broken\nstate:\n  initial: {}\n");
+    assert.throws(
+      () => loadWorldFromDir(root),
+      (error) => error instanceof Error && error.message.includes(`(while loading world at ${root})`)
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("unknown top-level manifest fields are rejected with the allowed key set", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    writeWorld(dir, "only", "Only");
+    const root = join(dir, "only");
+    // The classic typo: `writting` would silently disable the whole writing axis.
+    appendFileSync(join(root, "world.yaml"), "writting: ./writing.yaml\n");
+
+    assert.throws(() => loadWorldFromDir(root), /Unknown world\.yaml field\(s\): "writting".*Allowed keys:.*writing/s);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("tools.include that is not a string list is rejected, not defaulted to []", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    writeWorld(dir, "only", "Only");
+    const root = join(dir, "only");
+    appendFileSync(join(root, "world.yaml"), "tools:\n  include: core.state\n");
+
+    assert.throws(() => loadWorldFromDir(root), /tools\.include.*list of strings/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("tools.extra that is not a string list is rejected", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    writeWorld(dir, "only", "Only");
+    const root = join(dir, "only");
+    appendFileSync(join(root, "world.yaml"), "tools:\n  extra: ./tools/local-tool.ts\n");
+
+    assert.throws(() => loadWorldFromDir(root), /tools\.extra.*list of strings/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing gm prompt file fails at load with its resolved path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    writeWorld(dir, "only", "Only");
+    const root = join(dir, "only");
+    rmSync(join(root, "prompts", "gm.md"));
+
+    assert.throws(
+      () => loadWorldFromDir(root),
+      (error) =>
+        error instanceof Error &&
+        error.message.includes(`prompts.gm[0]`) &&
+        error.message.includes(join(root, "prompts", "gm.md"))
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing memory schema file fails at load with its resolved path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    writeWorld(dir, "only", "Only");
+    const root = join(dir, "only");
+    rmSync(join(root, "memory", "characters.yaml"));
+
+    assert.throws(
+      () => loadWorldFromDir(root),
+      (error) =>
+        error instanceof Error &&
+        error.message.includes(`memory.schemas[0]`) &&
+        error.message.includes(join(root, "memory", "characters.yaml"))
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing lore source file fails at load with its resolved path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    const root = writeSplitWorld(dir, "split");
+    rmSync(join(root, "lore", "characters.yaml"));
+
+    assert.throws(
+      () => loadWorldFromDir(root),
+      (error) =>
+        error instanceof Error &&
+        error.message.includes(`lore.sources[0].path`) &&
+        error.message.includes(join(root, "lore", "characters.yaml"))
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a missing tools.extra module fails at load with its resolved path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    const root = writeSplitWorld(dir, "split");
+    rmSync(join(root, "tools", "local-tool.ts"));
+
+    assert.throws(
+      () => loadWorldFromDir(root),
+      (error) =>
+        error instanceof Error &&
+        error.message.includes(`tools.extra[0]`) &&
+        error.message.includes(join(root, "tools", "local-tool.ts"))
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("non-integer min/max on an int attribute is rejected, not dropped", () => {
+  const dir = mkdtempSync(join(tmpdir(), "worlds-"));
+  try {
+    const root = join(dir, "w");
+    mkdirSync(join(root, "memory"), { recursive: true });
+    mkdirSync(join(root, "prompts"), { recursive: true });
+    writeFileSync(join(root, "prompts", "gm.md"), "# GM\n");
+    writeFileSync(join(root, "memory", "characters.yaml"), "memory_type: characters\n");
+    writeFileSync(
+      join(root, "world.yaml"),
+      [
+        "name: w",
+        "state:",
+        "  initial:",
+        "    player: { name: \"\", status: ok, location: here }",
+        "    time: { day: 1, hour: 8 }",
+        "    scene: { summary: start }",
+        "  attributes:",
+        "    energy:",
+        "      type: int",
+        "      min: \"0\"",
+        "      initial: 5",
+        "prompts:",
+        "  gm: [ ./prompts/gm.md ]",
+        "memory:",
+        "  policy:",
+        "    self: { enabled: true }",
+        "    peer: { enabled: false }",
+        "    memory_types: [ characters ]",
+        "  schemas: [ ./memory/characters.yaml ]",
+        "  fallback_memory_types: [ entities ]",
+        ""
+      ].join("\n")
+    );
+
+    assert.throws(() => loadWorldFromDir(root), /state\.attributes\.energy\.min.*must be an integer/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

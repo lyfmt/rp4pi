@@ -34,7 +34,7 @@ import {
 // as a confusing runtime failure far from its cause.
 
 export const WORLDS_DIRNAME = "worlds";
-const MANIFEST_FILENAME = "world.yaml";
+export const MANIFEST_FILENAME = "world.yaml";
 const MODULE_FIELDS = [
   "state",
   "prompts",
@@ -47,6 +47,10 @@ const MODULE_FIELDS = [
   "writing",
   "revision"
 ] as const;
+// The complete set of top-level keys loadWorldFromDir reads. Anything else in
+// world.yaml is almost certainly a typo (`writting:` would silently disable a
+// whole axis), so unknown keys are a named error, not an ignored no-op.
+const TOP_LEVEL_FIELDS: readonly string[] = ["name", "display_name", "description", ...MODULE_FIELDS, "systems"];
 
 export type LoadWorldOptions = {
   /** Override the active world by name; defaults to process.env.RP_WORLD. */
@@ -94,13 +98,26 @@ export function loadActiveWorld(projectRoot: string, options: LoadWorldOptions =
 
 /** Parse and validate a single world pack directory. Exported for tests. */
 export function loadWorldFromDir(worldRoot: string): LoadedWorld {
+  try {
+    return parseWorldDir(worldRoot);
+  } catch (error) {
+    // Every load/validation failure names its source pack: manifests are split
+    // across module YAMLs, so a bare field path is hard to trace back to a world.
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message} (while loading world at ${worldRoot})`, { cause: error });
+  }
+}
+
+function parseWorldDir(worldRoot: string): LoadedWorld {
   const manifestPath = join(worldRoot, MANIFEST_FILENAME);
   if (!existsSync(manifestPath)) {
     throw new Error(`World manifest missing: ${manifestPath}`);
   }
 
   const raw = parseYaml(readFileSync(manifestPath, "utf8")) as unknown;
-  const manifest = expandManifestModules(asRecord(raw, "world.yaml root"), worldRoot);
+  const rootRecord = asRecord(raw, "world.yaml root");
+  assertKnownTopLevelFields(rootRecord);
+  const manifest = expandManifestModules(rootRecord, worldRoot);
   const name = requireString(manifest.name, "name");
 
   const state = asRecord(manifest.state, "state");
@@ -128,6 +145,16 @@ export function loadWorldFromDir(worldRoot: string): LoadedWorld {
   };
 }
 
+function assertKnownTopLevelFields(manifest: Record<string, unknown>): void {
+  const unknown = Object.keys(manifest).filter((key) => !TOP_LEVEL_FIELDS.includes(key));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown world.yaml field(s): ${unknown.map((key) => `"${key}"`).join(", ")}. ` +
+        `Allowed keys: ${TOP_LEVEL_FIELDS.join(", ")}.`
+    );
+  }
+}
+
 function expandManifestModules(manifest: Record<string, unknown>, worldRoot: string): Record<string, unknown> {
   const expanded = { ...manifest };
   for (const field of MODULE_FIELDS) {
@@ -143,10 +170,7 @@ function readManifestModule(pathValue: string, field: string, worldRoot: string)
   if (pathValue.length === 0) {
     throw new Error(`World manifest field "${field}" must reference a non-empty YAML module path.`);
   }
-  const modulePath = resolveRelative(pathValue, worldRoot);
-  if (!existsSync(modulePath)) {
-    throw new Error(`World manifest field "${field}" references missing YAML module: ${modulePath}.`);
-  }
+  const modulePath = resolveExistingFile(pathValue, field, worldRoot, "YAML module");
   const parsed = parseYaml(readFileSync(modulePath, "utf8")) as unknown;
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error(`World manifest field "${field}" module ${modulePath} must contain a mapping or list.`);
@@ -187,8 +211,8 @@ function parseAttributes(value: unknown): AttributeSpec[] {
         kind: "int" as const,
         name,
         description,
-        min: optionalInteger(spec.min),
-        max: optionalInteger(spec.max),
+        min: optionalInteger(spec.min, `state.attributes.${name}.min`),
+        max: optionalInteger(spec.max, `state.attributes.${name}.max`),
         initial: requireInteger(spec.initial, `state.attributes.${name}.initial`)
       };
     }
@@ -227,7 +251,12 @@ function parsePromptPaths(value: unknown, worldRoot: string, options: { gmTempla
   if (!Array.isArray(gm) || gm.length === 0) {
     throw new Error("prompts.gm must be a non-empty list of prompt file paths.");
   }
-  return gm.map((entry, index) => resolveRelative(requireString(entry, `prompts.gm[${index}]`), worldRoot));
+  // A GM prompt is the agent's persona; a typo'd path would otherwise load a
+  // world whose GM silently has no instructions. Fail at load, like systems.
+  return gm.map((entry, index) => {
+    const field = `prompts.gm[${index}]`;
+    return resolveExistingFile(requireString(entry, field), field, worldRoot, "prompt file");
+  });
 }
 
 function parsePromptTemplates(value: unknown, worldRoot: string): PromptTemplates {
@@ -327,7 +356,11 @@ function parseMemory(value: unknown, worldRoot: string): WorldMemoryConfig {
   const peer = asRecord(policy.peer, "memory.policy.peer");
   const memoryTypes = requireStringArray(policy.memory_types, "memory.policy.memory_types");
   const schemas = requireStringArray(memory.schemas, "memory.schemas");
-  const schemaPaths = schemas.map((entry) => resolveRelative(entry, worldRoot));
+  // A schema file is what OV indexes memories against; a missing one should
+  // fail at load with its resolved path, not as a confusing OV error later.
+  const schemaPaths = schemas.map((entry, index) =>
+    resolveExistingFile(entry, `memory.schemas[${index}]`, worldRoot, "schema file")
+  );
   return {
     policy: {
       self: { enabled: self.enabled === true },
@@ -355,8 +388,11 @@ function parseLore(value: unknown, worldRoot: string): WorldLoreConfig {
   return {
     sources: sources.map((raw, index) => {
       const source = asRecord(raw, `lore.sources[${index}]`);
+      const pathField = `lore.sources[${index}].path`;
       const parsed = {
-        path: resolveRelative(requireString(source.path, `lore.sources[${index}].path`), worldRoot),
+        // Lore sources are imported into SQLite at startup; a typo'd path must
+        // fail here with the field name, not as a distant importer error.
+        path: resolveExistingFile(requireString(source.path, pathField), pathField, worldRoot, "lore source file"),
         defaultKind: optionalNonEmptyString(source.default_kind, `lore.sources[${index}].default_kind`)
       };
       return parsed.defaultKind === undefined ? { path: parsed.path } : parsed;
@@ -370,8 +406,12 @@ function parseTools(value: unknown, worldRoot: string): { include: string[]; ext
   }
   const tools = asRecord(value, "tools");
   return {
-    include: optionalStringArray(tools.include),
-    extra: optionalStringArray(tools.extra).map((entry) => resolveRelative(entry, worldRoot))
+    include: optionalStringArray(tools.include, "tools.include"),
+    // Extra tool modules are imported at startup; check existence at load so a
+    // typo'd path fails with its field name instead of a runtime import error.
+    extra: optionalStringArray(tools.extra, "tools.extra").map((entry, index) =>
+      resolveExistingFile(entry, `tools.extra[${index}]`, worldRoot, "tool module")
+    )
   };
 }
 
@@ -380,13 +420,9 @@ function parseSystemModulePaths(value: unknown, worldRoot: string): string[] {
     return [];
   }
 
-  return requireStringArray(value, "systems").map((entry, index) => {
-    const modulePath = resolveRelative(requireString(entry, `systems[${index}]`), worldRoot);
-    if (!existsSync(modulePath) || !statSync(modulePath).isFile()) {
-      throw new Error(`World manifest field "systems[${index}]" references missing System module: ${modulePath}.`);
-    }
-    return modulePath;
-  });
+  return requireStringArray(value, "systems").map((entry, index) =>
+    resolveExistingFile(entry, `systems[${index}]`, worldRoot, "System module")
+  );
 }
 
 // Parse the `subagents:` list into normalized specs. Each entry maps 1:1 onto
@@ -646,6 +682,21 @@ function resolveRelative(path: string, worldRoot: string): string {
   return isAbsolute(path) ? path : resolve(worldRoot, path);
 }
 
+// Shared "referenced file must exist" check: resolve relative to the world
+// root, then require an existing regular file. Every manifest reference the
+// runtime will read (module YAMLs, prompts.gm, memory.schemas, systems,
+// lore.sources[].path, tools.extra) goes through here so a typo'd path fails
+// at load with the field name + resolved path instead of crashing far away at
+// runtime. Deliberate exceptions: writing guides and subagent personas defer
+// their existence check to the moment they are read (see parseWriting).
+function resolveExistingFile(value: string, field: string, worldRoot: string, kind: string): string {
+  const path = resolveRelative(value, worldRoot);
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    throw new Error(`World manifest field "${field}" references missing ${kind}: ${path}.`);
+  }
+  return path;
+}
+
 function asRecord(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`World manifest field "${field}" must be a mapping.`);
@@ -682,8 +733,14 @@ function requireInteger(value: unknown, field: string): number {
   return value;
 }
 
-function optionalInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+// Like requireInteger, but absent (undefined/null) stays undefined. A present
+// non-integer (e.g. `min: "0"`) is a named error rather than a silently dropped
+// bound — the attribute would otherwise lose its range check without a peep.
+function optionalInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return requireInteger(value, field);
 }
 
 function requireStringArray(value: unknown, field: string): string[] {
@@ -693,6 +750,12 @@ function requireStringArray(value: unknown, field: string): string[] {
   return value as string[];
 }
 
-function optionalStringArray(value: unknown): string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? (value as string[]) : [];
+// Like requireStringArray, but absent (undefined/null) normalizes to []. A
+// present-but-wrong value (e.g. a bare string) is a named error, not a silent
+// empty list — the GM would otherwise lose its whole toolset without a peep.
+function optionalStringArray(value: unknown, field: string): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return requireStringArray(value, field);
 }

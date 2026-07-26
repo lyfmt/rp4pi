@@ -755,8 +755,13 @@ RP_WORLD=my-world ./start.sh
 
 ```bash
 npm run typecheck
-npm test           # loader 会校验你的 manifest 结构；测试全绿说明 manifest 合法
+npm run validate-world my-world   # 只校验 my-world
+npm run validate-world            # 校验 worlds/ 下全部世界（`_` 开头目录除外，可显式点名，如 _template）
 ```
+
+`validate-world` 会完整加载每个世界包（manifest 结构、prompts/schema/lore/tools.extra
+等引用文件的存在性、路径归一化），任一世界 fail 则退出码非 0。manifest `name` 与目录名不一致时会给出
+warn（不算失败）：lore 按 `name` 入库，复制模板后忘改 `name` 会和其它世界串库。
 
 ## 范例
 
@@ -766,10 +771,31 @@ npm test           # loader 会校验你的 manifest 结构；测试全绿说明
 
 ## 常见错误与报错
 
-loader 的校验信息会点名出错字段 + 世界名。常见：
+loader 的校验信息会点名出错字段，并在结尾附上世界目录：
+`… (while loading world at <世界目录>)`，manifest 拆成多个 YAML 模块时也能定位来源。常见：
 
 - `prompts.gm must be a non-empty list` —— 忘了写 GM prompt 或写成了非列表。
+- `Unknown world.yaml field(s): "writting"` —— 顶层字段拼写错误（未知字段不再被静默忽略），
+  报错会列出允许的字段集合。
+- `"prompts.gm[0]" references missing prompt file` / `"memory.schemas[0]" references missing
+  schema file` —— 引用的文件不存在，加载期即报错（`writing` 指导的路径刻意不做加载期检查，
+  错误延迟到 writer 实际读取该指导时，见「Writing」）。
+- `"lore.sources[0].path" references missing lore source file` —— lore 源文件不存在，
+  加载期即报错，不再拖到启动导入 SQLite 时才崩。
+- `"tools.extra[0]" references missing tool module` —— world-local 工具模块不存在，
+  加载期即报错，不再拖到运行期 import 失败。
+- `"tools.include" must be a list of strings` —— `include` / `extra` 类型写错；只有省略整个
+  `tools` 段才会走默认值 `core.state` + `core.memory`。
 - `memory.schemas must all live in one directory` —— schema 文件分散在多个目录，
   OV 的 `custom_templates_dir` 只能指一个目录。
-- `state.initial.time.day must be an integer` —— 初值类型写错。
+- `state.initial.time.day must be an integer` —— 初值类型写错；int 属性的 `min` / `max`
+  存在时同样必须是整数。
 - `World "<name>" not found` —— `RP_WORLD` 指定了不存在的世界，报错会列出可用世界。
+
+## 升级注意
+
+- 旧版 loader 会**静默忽略** `world.yaml` 顶层的自定义键（如 `author:`、`version:` 这类
+  元数据）。现在未知顶层键会被直接拒绝（防止 `writting:` 之类拼写错误静默禁用整条轴）。
+  元数据请放进 `description`，或改写成 YAML 注释。
+- `lore.sources[].path` 与 `tools.extra` 现在也做加载期存在性检查：以前路径拼错能通过
+  `validate-world`、却在运行期远处崩溃，现在会在加载时以字段名 + 解析后路径报错。
