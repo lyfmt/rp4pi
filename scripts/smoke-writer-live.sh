@@ -32,6 +32,14 @@ if [ ! -f "$prompt_path" ]; then
   exit 0
 fi
 
+# 本 smoke 断言的就是 OpenViking append 链路：.env 默认 RP_DISABLE_OPENVIKING=1
+# 会让 openviking-memory 扩展在 activate 时直接 no-op，ov_session_bindings 断言
+# 必然失败。configured-client 只在该值恰为 "1" 时禁用，且 load-env.sh 对已导出的
+# 环境变量让位，所以这里显式 export 即可覆盖 .env。binding 行由 appendTurnToMemory
+# 在发起任何 OV 网络请求之前写入本地 SQLite（server 不可达时链路降级为提示消息），
+# 因此该断言不要求 OpenViking server 在线。
+export RP_DISABLE_OPENVIKING=0
+
 timeout_seconds="${RP_WRITER_LIVE_TIMEOUT_SECONDS:-300}"
 session_id="writer-live-smoke-$(date +%s)-$$"
 prompt="${RP_WRITER_LIVE_PROMPT:-开始新游戏，使用默认 demo 世界。用一个很短的开场回合完成初始化，并提交需要 writer 渲染的 direction packet。}"

@@ -24,3 +24,6 @@ load_env_value() {
 load_env_value OPENVIKING_URL
 load_env_value OPENVIKING_API_KEY
 load_env_value OPENVIKING_ACCOUNT
+# .env 中的记忆开关：所有 source 本脚本的入口（start.sh、smoke-*.sh）都要看到它，
+# 所以在这里统一导出，而不是散落在各入口脚本里。
+load_env_value RP_DISABLE_OPENVIKING

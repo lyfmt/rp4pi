@@ -46,6 +46,58 @@ test("load-env loads local env values without overriding existing exports", () =
   }
 });
 
+test("load-env loads the RP_DISABLE_OPENVIKING switch without overriding existing exports", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-load-env-"));
+  const envPath = join(dir, ".env");
+  try {
+    writeFileSync(envPath, "RP_DISABLE_OPENVIKING=1\n");
+
+    // Fresh shell: the .env value is exported for every entrypoint that
+    // sources load-env.sh (start.sh, smoke-*.sh).
+    const loaded = spawnSync(
+      "bash",
+      [
+        "-c",
+        [
+          "unset RP_DISABLE_OPENVIKING",
+          "RP_AGENT_ENV_FILE=\"$1\"",
+          "source \"$2\"",
+          "printf '%s\\n' \"$RP_DISABLE_OPENVIKING\""
+        ].join("; "),
+        "bash",
+        envPath,
+        loadEnvScript
+      ],
+      { encoding: "utf8" }
+    );
+    assert.equal(loaded.status, 0, loaded.stderr);
+    assert.equal(loaded.stdout.trim(), "1");
+
+    // Existing exports keep priority over .env (the semantics smoke scripts
+    // rely on to force-enable the OpenViking path).
+    const preexisting = spawnSync(
+      "bash",
+      [
+        "-c",
+        [
+          "export RP_DISABLE_OPENVIKING=0",
+          "RP_AGENT_ENV_FILE=\"$1\"",
+          "source \"$2\"",
+          "printf '%s\\n' \"$RP_DISABLE_OPENVIKING\""
+        ].join("; "),
+        "bash",
+        envPath,
+        loadEnvScript
+      ],
+      { encoding: "utf8" }
+    );
+    assert.equal(preexisting.status, 0, preexisting.stderr);
+    assert.equal(preexisting.stdout.trim(), "0");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("start.sh creates default writer and OpenViking settings for a new project checkout", () => {
   const dir = mkdtempSync(join(tmpdir(), "rp-start-settings-"));
   try {
