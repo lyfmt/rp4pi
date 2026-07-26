@@ -21,6 +21,7 @@
 !.pi/agents/writer.md
 
 # Runtime artifacts
+/.debug/
 /.pi-subagents/
 /sessions/
 /state/

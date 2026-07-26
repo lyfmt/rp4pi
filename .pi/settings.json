@@ -1,6 +1,6 @@
 {
   "packages": [
-    "npm:pi-subagents"
+    "npm:pi-subagents@0.32.0"
   ],
   "agents": {
     "writer": ".pi/agents/writer.md"
