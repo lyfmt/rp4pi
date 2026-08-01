@@ -7,6 +7,8 @@ const mod = await import(
 );
 const createSavePickerComponent =
   mod.createSavePickerComponent as typeof import("../../src/commands/save-picker-component.js").createSavePickerComponent;
+const createSearchablePickerComponent =
+  mod.createSearchablePickerComponent as typeof import("../../src/commands/save-picker-component.js").createSearchablePickerComponent;
 
 // Default keybindings matcher mirroring pi's TUI action ids we rely on.
 const keybindings = {
@@ -126,4 +128,30 @@ test("requestRender is called on navigation but not on no-op keys", () => {
   assert.equal(getRenders(), 1);
   component.handleInput?.("\x1b[Z"); // shift-tab: not handled
   assert.equal(getRenders(), 1);
+});
+
+test("generic searchable picker renders custom model copy and returns a filtered id", () => {
+  let result: string | undefined;
+  const component = createSearchablePickerComponent(
+    [
+      { id: "provider-a/model-a", label: "model-a [provider-a]" },
+      { id: "provider-b/model-b", label: "model-b [provider-b]" }
+    ],
+    { requestRender() {} },
+    theme,
+    keybindings,
+    (id) => {
+      result = id;
+    },
+    {
+      title: "选择新模型",
+      emptyText: "没有匹配的可用模型"
+    }
+  );
+
+  const lines = component.render(60);
+  assert.equal(lines[0], "选择新模型");
+  component.handleInput?.("b");
+  component.handleInput?.(ENTER);
+  assert.equal(result, "provider-b/model-b");
 });

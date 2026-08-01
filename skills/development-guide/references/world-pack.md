@@ -458,6 +458,7 @@ settings 只覆盖 `model` / `thinking`；`kind`、`prompt`、`tools`、`extensi
 `subagents` 段保留给 Pi / pi-subagents 原生设置（如 `disableBuiltins`），RP 子代理模型偏好写在 `rpSubagents`。
 GM 游玩中 `forge_role` 生成的动态 role 也按角色名读取同一段配置；已知道某个动态角色名后，可加一条同名覆盖。
 writer / revision 管道不是 pi-subagents 子进程：writer 主体读 `writer` 段，增强/critic 可用 `writerAgents` 段单独覆盖。
+运行中可用 `/rpconfig` 先选择目标子代理，再从 Pi 已认证模型中选择新模型；命令会写入 `rpSubagents` 并立即重新物化当前世界及当前存档的角色子代理。
 
 ### role 型：轨迹如何工作
 
@@ -702,6 +703,7 @@ writer 主体读 `.pi/agent/settings.json` 的 `writer` 段。修订管道可用
 为三个只读建议/审稿 agent 单独指定模型；未指定时回退 `writer` 模型。最终 rewrite
 仍走 `writer` 模型，因为它是玩家可见正文的作者。
 `thinking` 是可选字段，运行时会按 Pi 约定拼成 `model:thinking` 交给 model registry。
+运行中可用 `/rpconfig` 分别选择 Writer、文风增强、惯性审稿和八股审稿的模型；现有 `thinking` 档位保持不变。
 
 ```json
 {
@@ -750,18 +752,6 @@ cp -r worlds/_template worlds/my-world
 # 6. 跑起来
 RP_WORLD=my-world ./start.sh
 ```
-
-改完后跑校验：
-
-```bash
-npm run typecheck
-npm run validate-world my-world   # 只校验 my-world
-npm run validate-world            # 校验 worlds/ 下全部世界（`_` 开头目录除外，可显式点名，如 _template）
-```
-
-`validate-world` 会完整加载每个世界包（manifest 结构、prompts/schema/lore/tools.extra
-等引用文件的存在性、路径归一化），任一世界 fail 则退出码非 0。manifest `name` 与目录名不一致时会给出
-warn（不算失败）：lore 按 `name` 入库，复制模板后忘改 `name` 会和其它世界串库。
 
 ## 范例
 

@@ -14,7 +14,7 @@ Design from the role-play table first, not from a mechanical assistant workflow.
 Primary loop:
 
 ```text
-RP contract -> module plan -> world pack files -> validation -> live smoke
+RP contract -> module plan -> world pack files
 ```
 
 ## Role-Play Authorship Boundaries
@@ -46,9 +46,6 @@ When an instruction reads like a generic checklist, rewrite it as an in-world re
 5. Keep the runtime loop intact.
    GM performs setup, reads status/lore/memory as needed, and delegates role subagents for character action inputs. Core player/time/scene/attributes changes use existing `update_*` tools; System module state changes use `commit_turn` operations. `commit_turn` only advances state, so GM still hands presentation to `submit_direction_packet`. Writer renders read-only from the packet and guides. Revision checks the prose. Successful story delivery records a snapshot and triggers memory and hooks.
 
-6. Verify.
-   Run typecheck/tests. Use live smoke only when model/OV access is intended.
-
 ## Reference Routing
 
 | Need | Read |
@@ -69,4 +66,4 @@ Stop and write an implementation plan instead of editing only world files when t
 - reliable enforcement that a GM, writer, role, or tool agent cannot see or author content outside its role;
 - a guarantee that prompt text alone cannot enforce.
 
-For those cases, use `development-guide` plus normal code/test workflow.
+For those cases, use `development-guide` plus the normal source-code workflow.

@@ -2,7 +2,8 @@
 
 ## Target Shape
 
-This repository's primary authoring unit is a world pack:
+This repository's primary authoring unit is a world pack. A migration may use any
+subset of this shape:
 
 ```text
 worlds/<slug>/
@@ -25,9 +26,10 @@ worlds/<slug>/
     └── runtime-plan.md
 ```
 
-`migration/` is for audit artifacts. Runtime-facing modules should be clean project-native files.
+`migration/` is optional and can hold any source notes or intermediate artifacts
+the author wants to retain.
 
-## IR To Module Map
+## Possible IR To Module Map
 
 | IR Block | Project File |
 |---|---|
@@ -42,22 +44,23 @@ worlds/<slug>/
 | periodic drift/background pressure | `hooks.yaml` |
 | NPC continuity | `subagents.yaml` role agents |
 | new NPC/role creation | tool subagents such as `npc-generator` or `role-forger` |
-| complex mechanics (affinity/HP/economy/combat rules) | world-local System module: `worlds/<slug>/systems/*.ts` with `defineSystem()`, listed in `world.yaml` `systems:`; GM advances it via `commit_turn` operations (see `development-guide` world-pack "Systems"). Only fall back to a `src/` implementation plan when a capability the System contract lacks is required |
+| complex mechanics (affinity/HP/economy/combat rules) | world-local System module: `worlds/<slug>/systems/*.ts` with `defineSystem()`, listed in `world.yaml` `systems:` and advanced through `commit_turn`; source implementation is another available choice |
 
 ## Prompt Mapping
 
-Keep GM prompt modular:
+GM prompts can be split by responsibility:
 
 - `prompts/gm-core.md`: premise, role, visibility rules, scene protocol.
 - `prompts/gm-tools.md`: when to use state, memory, and subagent tools.
 - `prompts/gm-output.md`: short output contract if the world needs one.
-- `prompt_template` only when default GM/writer ordering is insufficient.
+- `prompt_template` is available when a different GM/writer ordering is useful.
 
-Do not put large worldbook dumps, status panels, or formulas into prompt files. Large fixed facts need lore YAML plus built-in `lookup/read_lore`; formulas need runtime implementation.
+Large fixed facts often fit lore YAML plus built-in `lookup/read_lore`; formulas
+can use runtime implementation when deterministic behavior matters.
 
 ## State Mapping
 
-Use fixed core for:
+The fixed core provides:
 
 ```text
 player.name
@@ -68,7 +71,7 @@ time.hour
 scene.summary
 ```
 
-Use `attributes` for simple world-specific values:
+`attributes` can hold simple world-specific values:
 
 ```yaml
 attributes:
@@ -80,62 +83,32 @@ attributes:
     description: Publicly safe description of what the value means.
 ```
 
-Do not store hidden truth in public attributes unless this scaffold has a private projection for it. Prefer a private prompt/subagent boundary or an implementation plan.
+Hidden truth can use a private prompt/subagent boundary or source implementation
+when public attributes are not suitable.
 
 ## Memory Mapping
 
-OpenViking is long-term recall, not current-state authority.
+OpenViking is designed for long-term recall rather than current-state authority.
 
-- Characters and story events belong in memory schemas.
-- Current location, time, active objective, and simple meters belong in SQLite state.
-- Hidden-canonical memory must not use public `characters` or `story_events` unless it has been revealed.
+- Characters and story events often fit memory schemas.
+- Current location, time, active objective, and simple meters often fit SQLite state.
+- Hidden-canonical memory can remain outside public `characters` or `story_events` until revealed.
 - Schema changes require `~/.openviking/ov.conf` to point `memory.custom_templates_dir` at the active world's `memory/` directory.
 
 ## Subagent Mapping
 
-Use subagents for cognition boundaries, not for arithmetic or generic quality.
+Subagents are available for cognition boundaries and continuity. Arithmetic or
+generic helper work can use other module choices.
 
 | Need | Form |
 |---|---|
 | Persistent named NPC voice | `kind: role` |
-| Generate and remember a new NPC | `kind: tool` with a world-local extension (`forge_character` is a border-station example, not a base tool — each world declares its own in `subagents.yaml`; loader defers extension validation, so a missing module only fails at GM delegation time) |
+| Generate and remember a new NPC | `kind: tool` with a world-local extension (`forge_character` is a border-station example, not a base tool; each world may declare its own in `subagents.yaml`) |
 | Create a new persistent role during play | `kind: tool` with base-platform `forge_role` |
 | Secret/faction perspective | role or tool subagent with filtered task context |
-| Combat/economy/rules calculation | not subagent; System module (`defineSystem` + `commit_turn`) or world-local tools |
+| Combat/economy/rules calculation | System module (`defineSystem` + `commit_turn`), world-local tools, or another chosen implementation |
 
 Subagent output is input to GM. GM still owns deterministic state changes
 through the existing `update_*` tools and owns direction packets through
 `submit_direction_packet`. General facts/relationships writes remain an
 implementation gap until the extension contract is redesigned.
-
-## Validation
-
-Run structural checks, fastest first. `validate-world` loads and validates just
-the manifest contract without booting the runtime — use it as the inner loop
-while iterating on world files:
-
-```bash
-npm run validate-world <slug>
-npm run typecheck
-npm test
-```
-
-Run the ST residue scan:
-
-```bash
-bash scripts/check-st-residue.sh <slug>
-```
-
-It scans `worlds/<slug>`, `data`, and `skills/start-game` for ST runtime syntax
-(UpdateVariable / JSON Patch / EJS markers / `{{user}}`-style macros), excluding
-the `worlds/<slug>/migration/` audit notes. `PASS` + exit 0 means clean; hits
-are printed as `file:line`. Expected runtime-facing result: no hits outside
-migration notes.
-
-If the world has live behavior, run:
-
-```bash
-RP_WORLD=<slug> bash scripts/smoke-demo.sh
-```
-
-If a complex mechanic was only written in prompt text, the migration is incomplete.

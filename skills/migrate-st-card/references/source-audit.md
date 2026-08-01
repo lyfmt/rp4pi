@@ -14,7 +14,8 @@ python3 skills/migrate-st-card/scripts/get_entry.py card.json 0,3-5
 
 `list_entries.py` and `get_entry.py` accept both an extracted card JSON (embedded `character_book.entries` array) and a standalone ST worldbook export (uid-keyed `entries` dict with `key`/`disable` fields); both are normalized to the embedded V2 shape, and `character_book: null` is treated as no worldbook. Upstream reference: the scripts were adopted from tavern2agent (<https://github.com/Xerxes-2/tavern2agent>, MIT; see `scripts/LICENSE.tavern2agent`).
 
-If python3 is unavailable, ask for an exported JSON card or inspect the image with an equivalent ST card extractor. Do not manually transcribe a large card from screenshots.
+If python3 is unavailable, alternatives include an exported JSON card, an
+equivalent ST card extractor, or selective manual transcription.
 
 ## Source Map
 
@@ -22,29 +23,30 @@ If python3 is unavailable, ask for an exported JSON card or inspect the image wi
 |---|---|---|
 | `description`, `personality`, `scenario`, `system_prompt` | Stable character and setting facts | prompt for stance/brief facts; `lore.yaml` / `lore/*.yaml` for fixed canon; memory seed only for per-save history |
 | `first_mes` | Opening scene and missing setup fields | initial state, start flow, route defaults |
-| `alternate_greetings`, `group_only_greetings` | Route, difficulty, party, or opening variants | setup choices; never drop silently |
-| `creator_notes` | Author constraints, secrets, intended play | hidden rules, style, validation notes |
-| `character_book.entries[]` | World facts, rules, scripts, disabled drafts | disposition per entry |
+| `alternate_greetings`, `group_only_greetings` | Route, difficulty, party, or opening variants | possible setup choices |
+| `creator_notes` | Author constraints, secrets, intended play | hidden rules, style, author notes |
+| `character_book.entries[]` | World facts, rules, scripts, disabled drafts | possible prompt, lore, state, or omission notes |
 | `[initvar]` | Initial mutable state | `state.yaml` attributes or implementation plan |
 | `[mvu_update]` | When and how variables change | mechanics, hooks, tools, reducers |
-| Tavern Helper scripts | Zod schema, transforms, game logic, UI | state schema hints; drop ST shell |
-| Regex scripts | UI panels, cleanup, hidden injections, game text | extract fields/triggers; drop UI |
+| Tavern Helper scripts | Zod schema, transforms, game logic, UI | state schema hints; optionally omit ST shell |
+| Regex scripts | UI panels, cleanup, hidden injections, game text | possible fields/triggers; optionally omit UI |
 
 ## MVU Handling
 
-Treat MVU as a design document plus deterministic guardrails, not as a format to copy.
+MVU can be treated as a design document rather than copied as-is.
 
 - `[initvar]` gives initial values; schema defaults may also seed fields.
 - `[mvu_update]` gives trigger rules, value ranges, categories, and per-change limits.
 - Numeric updates often represent deltas, not absolute replacement.
-- Zod transforms and hooks are constraint hints; in this project they should become state schema, tools, hooks, or reducer work.
-- MVU display blocks, JSON Patch-like commands, and status panels are ST runtime shell. Strip them.
+- Zod transforms and hooks can inform state schema, tools, hooks, or reducer work.
+- MVU display blocks, JSON Patch-like commands, and status panels can be omitted when they only serve the ST runtime.
 
-If an MVU behavior is unclear, inspect the card's schema/scripts. Mark unknown facts as unconfirmed rather than inventing behavior.
+If an MVU behavior is unclear, the author can inspect the card's schema/scripts,
+mark it as unconfirmed, reinterpret it, or leave it out.
 
 ## Worldbook Disposition
 
-For every entry, including disabled entries, assign exactly one primary disposition:
+When per-entry tracking is useful, these disposition labels are available:
 
 | Disposition | Use When |
 |---|---|
@@ -59,7 +61,8 @@ For every entry, including disabled entries, assign exactly one primary disposit
 | `revision` | Cliche blacklist or final prose review constraint |
 | `discarded` | Duplicate, pure UI, ST output patch, or incompatible shell |
 
-Record a short reason. "Disabled" alone is not a reason.
+Entries may be grouped, split, summarized, or omitted instead of receiving an
+individual disposition. Reasons are optional working notes.
 
 ## Script Audit
 
@@ -87,33 +90,18 @@ ST prompt presets (chat-completion presets: `prompts`/`prompt_order` arrays with
 marker slots, injection depth/role settings, plus sampler params) configure ST's
 prompt assembly, not the card's game semantics. Handling:
 
-- Sampler/model params (temperature, penalties, max tokens): discard — model
-  configuration lives in `.pi/agent/settings.json`, never in world packs.
-- Prompt-order scaffolding, marker slots, injection depth/position: discard —
+- Sampler/model params (temperature, penalties, max tokens) can be omitted; model
+  configuration normally lives in `.pi/agent/settings.json`.
+- Prompt-order scaffolding, marker slots, injection depth/position can be omitted;
   this scaffold owns assembly (`prompts.yaml`; `prompt_template` only when
   default ordering is insufficient).
 - Preset prompt text that carries real world flavor, GM stance, or an output
   contract (a "main"/"post-history" block with actual setting or tone rules):
   audit like `system_prompt` — stable stance into `prompts/*.md`, style into
   `writing/*.md`, bans into `revision.yaml`.
-- COT scaffolds, "思维链/强化思考" blocks, output-format enforcers: discard the
-  shell; if one encodes a real output contract, restate it in
+- COT scaffolds, "思维链/强化思考" blocks, and output-format enforcers can be
+  omitted or adapted; a useful output contract can be restated in
   `prompts/gm-output.md` terms.
 
-A preset is per-user tuning, not card canon: when a card ships with several
-presets, audit only what changes game semantics, and record the disposition in
-`migration/` like any other source.
-
-## ST Cleanup
-
-Before project files are considered clean, run the residue scan:
-
-```bash
-bash scripts/check-st-residue.sh <slug>
-```
-
-It scans `worlds/<slug>`, `data`, and `skills/start-game` for ST runtime syntax
-(UpdateVariable / JSON Patch / EJS markers / `{{user}}`-style macros), excluding
-`worlds/<slug>/migration/**`. Allowed hits are only migration notes under
-`worlds/<name>/migration/`. Runtime-facing files should contain project-native
-language.
+A preset is per-user tuning, not card canon. When a card ships with several
+presets, authors may retain, adapt, or omit whichever parts fit the target world.

@@ -163,7 +163,7 @@ extra: []
 OpenViking lookup tools when available. `core.lookup` gives fixed-lore
 `lookup/read_lore`.
 
-World-local tools need source implementation and tests. A tool description should say:
+World-local tools need source implementation. A tool description should say:
 
 ```text
 one-line purpose
@@ -310,7 +310,8 @@ Use it for repeated prose failures. Do not use it for mechanical rules.
 
 ## Start Skill
 
-`skills/start-game/SKILL.md` is currently project-level. If a new world needs custom setup, update it so it is world-aware or create a world-specific start flow and ensure the active GM can find it.
+`skills/start-game/SKILL.md` is currently project-level. A new world can describe
+custom setup there or use a world-specific start flow.
 
 Opening setup should ask for missing player fields in one round, provide defaults, then enter the scene.
 

@@ -63,7 +63,9 @@ Hidden-canonical facts do not belong in public prompts, public memory schemas, w
 | Role subagent | "You are this character; answer in first person from your memories and current knowledge." | "Analyze the scene and provide what this NPC should do." |
 | Tool agent | "Return candidate facts or drafts for GM adjudication." | "Decide what becomes true in the story." |
 
-Use this test while editing any prompt: if the text asks an actor to know, decide, or write something outside its fictional or runtime role, move that instruction to the correct module or stop and plan source work.
+Use this question while editing any prompt: does the text ask an actor to know,
+decide, or write something outside its fictional or runtime role? If so, move
+that instruction to the appropriate module or plan source work.
 
 ## Multi-Agent Rule
 
@@ -100,15 +102,5 @@ Keep prompt modules short and operational:
 - avoid repeated examples of banned prose;
 - keep final output contracts short.
 
-If a rule must be reliable after context compaction, move it into lore, state, hook, tool, memory, or tests.
-
-## Validation Mindset
-
-`npm test` proves schema and deterministic pieces. It does not prove the GM will call tools correctly or the writer will preserve style.
-
-For playable worlds, validate both:
-
-- deterministic checks: typecheck and tests;
-- live smoke: start, setup, one or more turns, memory/hook/writer behavior.
-
-When a behavior depends on model tool choice, only a live or realistic smoke can prove it is wired.
+If a rule must remain available after context compaction, move it into lore,
+state, hooks, tools, memory, or another durable runtime mechanism.

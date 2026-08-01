@@ -75,6 +75,12 @@ export interface SessionManagerLike {
   getLeafId?(): string;
 }
 
+export type PiModelLike = {
+  provider: string;
+  id: string;
+  name?: string;
+};
+
 /**
  * Subset of pi `ExtensionContext` passed to every tool `execute`, command
  * `handler`, and event handler as the trailing `ctx` argument.
@@ -88,6 +94,9 @@ export interface ExtensionContextLike {
   ui?: ExtensionUIContextLike;
   isIdle?(): boolean;
   modelRegistry?: {
+    refresh?(): void;
+    getError?(): string | undefined;
+    getAvailable?(): PiModelLike[] | Promise<PiModelLike[]>;
     find(provider: string, modelId: string): unknown;
     getApiKeyAndHeaders(model: unknown): Promise<{ ok: boolean; apiKey?: string; headers?: Record<string, string> }>;
   };

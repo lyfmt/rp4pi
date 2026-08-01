@@ -5,7 +5,13 @@ import type {
   PiTuiHostLike
 } from "../types/pi.ts";
 
-export type SavePickerItem = { id: string; label: string };
+export type SearchablePickerItem = { id: string; label: string };
+export type SavePickerItem = SearchablePickerItem;
+
+export type SearchablePickerOptions = {
+  title: string;
+  emptyText: string;
+};
 
 const PAGE_SIZE = 10;
 
@@ -28,11 +34,25 @@ export function createSavePickerComponent(
   keybindings: PiKeybindingsLike,
   done: (id: string | undefined) => void
 ): PiComponentLike {
+  return createSearchablePickerComponent(items, tui, theme, keybindings, done, {
+    title: "选择存档",
+    emptyText: "没有匹配的存档"
+  });
+}
+
+export function createSearchablePickerComponent(
+  items: readonly SearchablePickerItem[],
+  tui: PiTuiHostLike,
+  theme: PiThemeLike,
+  keybindings: PiKeybindingsLike,
+  done: (id: string | undefined) => void,
+  options: SearchablePickerOptions
+): PiComponentLike {
   let filter = "";
   let page = 0;
   let selected = 0;
 
-  function filtered(): SavePickerItem[] {
+  function filtered(): SearchablePickerItem[] {
     if (filter.length === 0) {
       return [...items];
     }
@@ -40,11 +60,11 @@ export function createSavePickerComponent(
     return items.filter((item) => item.label.toLowerCase().includes(needle));
   }
 
-  function pageCount(matches: SavePickerItem[]): number {
+  function pageCount(matches: SearchablePickerItem[]): number {
     return Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   }
 
-  function clampPosition(matches: SavePickerItem[]): void {
+  function clampPosition(matches: SearchablePickerItem[]): void {
     const pages = pageCount(matches);
     page = Math.min(Math.max(page, 0), pages - 1);
     const onPage = matches.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
@@ -59,12 +79,12 @@ export function createSavePickerComponent(
       const onPage = matches.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
       const lines: string[] = [];
-      lines.push(theme.fg("accent", theme.bold("选择存档")));
+      lines.push(theme.fg("accent", theme.bold(options.title)));
       lines.push(theme.fg("muted", `过滤：${filter.length > 0 ? filter : "（输入以过滤）"}`));
       lines.push("");
 
       if (onPage.length === 0) {
-        lines.push(theme.fg("muted", "  没有匹配的存档"));
+        lines.push(theme.fg("muted", `  ${options.emptyText}`));
       } else {
         onPage.forEach((item, index) => {
           const isSelected = index === selected;

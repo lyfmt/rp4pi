@@ -5,12 +5,18 @@ import { loadCommand } from "./load.ts";
 import { rollCommand } from "./roll.ts";
 import { saveCommand } from "./save.ts";
 import { createSavePickerComponent } from "./save-picker-component.ts";
+import {
+  registerRpConfigCommand,
+  type RpConfigRegistrationContext
+} from "./rpconfig.ts";
 import { statusCommand } from "./status.ts";
 
 const commands: CommandDefinition[] = [statusCommand, saveCommand, loadCommand, rollCommand];
 
 export type CommandBaseContext = Omit<CommandContext, "piSessionId" | "nativePickSave" | "getLatestUserMessage" | "rerunTurn"> & {
   projectRoot?: string;
+  getSubagents?: RpConfigRegistrationContext["getSubagents"];
+  onSubagentsChanged?: RpConfigRegistrationContext["onSubagentsChanged"];
 };
 
 export function registerAllCommands(pi: PiLike, context: CommandBaseContext): void {
@@ -43,6 +49,7 @@ export function registerAllCommands(pi: PiLike, context: CommandBaseContext): vo
       }
     });
   }
+  registerRpConfigCommand(pi, context);
 }
 
 // `record<string, unknown>` is the common case for our commands (none currently

@@ -85,6 +85,13 @@ OpenViking 连接参数可写入本地 `.env`：
 | `RP_DISABLE_OPENVIKING` | `1`（`.env.example` 默认设置） | 设为 `1` 禁用长期记忆连接；启用 OpenViking 时注释掉 `.env` 里的该行 |
 | `RP_AGENT_ENV_FILE` | `.env` | 指定 OpenViking 环境配置文件 |
 
+模型可直接在运行中的输入框配置：
+
+- `/model`：切换当前 GM 主模型（Pi 原生命令）。
+- `/rpconfig`：先选择 Writer、文风增强、惯性审稿、八股审稿或当前世界的静态/动态子代理，再选择目标模型。
+
+`/rpconfig` 只列出 Pi 中已认证可用的模型，结果写入 `.pi/agent/settings.json`；已有 `thinking` 档位和其他设置保持不变。Writer 从下一次渲染起生效，子代理配置写入后立即重新物化。
+
 密钥只应放在 `.env`、环境变量或 `.pi/agent/` 下的本地文件中，不要写入世界包、源码或 Issue。
 
 ## 世界包
@@ -93,7 +100,6 @@ OpenViking 连接参数可写入本地 `.env`：
 
 ```bash
 cp -r worlds/_template worlds/my-world
-npm run validate-world my-world
 RP_WORLD=my-world ./start.sh
 ```
 
@@ -101,7 +107,7 @@ RP_WORLD=my-world ./start.sh
 
 ### 从 SillyTavern 角色卡迁移
 
-支持从 SillyTavern 角色卡（PNG / WEBP / JPEG / JSON）迁移。在 Pi 会话里让 agent 使用 `migrate-st-card` 技能，它会审计角色卡语义并映射为世界包模块。角色卡提取脚本已收编在 `skills/migrate-st-card/scripts/`（需 Python >= 3.10）。迁移产物是一个 `worlds/<name>/` 世界包。
+支持从 SillyTavern 角色卡（PNG / WEBP / JPEG / JSON）迁移。在 Pi 会话里让 agent 使用 `migrate-st-card` 技能，可按需要提取、审计、改写或省略卡片内容，并自由映射为世界包模块。角色卡提取脚本已收编在 `skills/migrate-st-card/scripts/`（需 Python >= 3.10）。迁移产物可放在 `worlds/<name>/` 世界包中。
 
 ## 常用命令
 
@@ -123,6 +129,7 @@ bash scripts/smoke-writer-live.sh
 | `/save` | 保存并返回 save id |
 | `/load` | 切换当前 Pi session 绑定的存档 |
 | `/roll` | 回退到上一成功 story snapshot 并重跑当前输入 |
+| `/rpconfig` | 选择并修改 Writer、修订阶段或 RP 子代理使用的模型 |
 
 ## 项目结构
 

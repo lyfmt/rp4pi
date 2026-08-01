@@ -15,10 +15,12 @@ import { onTurnRendered } from "../src/runtime/turn-events.ts";
 import { drainStoryCommits } from "../src/runtime/story-commit-tracker.ts";
 import { emitLiveProgress } from "../src/runtime/live-progress.ts";
 import { activateSave } from "../src/state/active-save.ts";
+import { listDynamicRoles } from "../src/state/dynamic-roles.ts";
 import { getBoundSave } from "../src/state/session-binding.ts";
 import { registerAllTools } from "../src/tools/registry.ts";
 import { registerAllCommands } from "../src/commands/registry.ts";
 import { materializeWorldSubagents } from "../src/world/materialize-subagents.ts";
+import { materializeDynamicRoles } from "../src/world/materialize-dynamic-roles.ts";
 import type { LoadedWorld, PromptTemplateSpec } from "../src/world/schema.ts";
 import { resolveSessionId, type PiLike } from "../src/types/pi.ts";
 
@@ -229,7 +231,28 @@ export function activate(pi: PiLike): void {
     projectRoot
   };
   registerAllTools(pi, stateContext, ovClient ? { db, stateStore, ovClient } : undefined, world.tools);
-  registerAllCommands(pi, { db, stateStore, systemRuntime, storySnapshots, projectRoot });
+  registerAllCommands(pi, {
+    db,
+    stateStore,
+    systemRuntime,
+    storySnapshots,
+    projectRoot,
+    getSubagents: (piSessionId) => {
+      const staticSubagents = world.subagents.map(({ name, model, thinking }) => ({ name, model, thinking }));
+      const saveId = getBoundSave(db, piSessionId);
+      const dynamicSubagents = saveId === undefined
+        ? []
+        : listDynamicRoles(db, saveId).map(({ name }) => ({ name }));
+      return [...staticSubagents, ...dynamicSubagents];
+    },
+    onSubagentsChanged: (piSessionId) => {
+      materializeWorldSubagents(projectRoot, world);
+      const saveId = getBoundSave(db, piSessionId);
+      if (saveId !== undefined) {
+        materializeDynamicRoles(projectRoot, db, saveId);
+      }
+    }
+  });
 }
 
 export default activate;

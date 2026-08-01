@@ -98,35 +98,9 @@ and may run multiple times before presentation handoff. Do not let writer write 
 Do not let subagents write state except through
 explicitly scoped tool agents whose output GM still adjudicates.
 
-Authorship check before validation:
+Authorship notes:
 
 - GM direction tells the writer what changed and what each actor intends; it does not perform the final prose or speak as role subagents.
 - Writer renders the playable text; it does not invent new rulings, new facts, or secret knowledge to make the scene stronger.
 - Role subagents speak and act only as themselves; they do not summarize the world, report on other minds, or exceed what the character can know.
 - Tool agents return candidates or facts inside their brief; GM remains the adjudicator.
-
-## 6. Validate
-
-Basic checks, fastest first. `validate-world` loads and validates just the
-world manifest contract without booting the runtime — use it as the inner loop
-while iterating on world files:
-
-```bash
-npm run validate-world <slug>
-npm run typecheck
-npm test
-```
-
-Run the project smoke when appropriate:
-
-```bash
-RP_WORLD=<slug> bash scripts/smoke-demo.sh
-```
-
-Run live writer smoke only when real model calls are intended:
-
-```bash
-RP_WORLD=<slug> bash scripts/smoke-writer-live.sh
-```
-
-If OV is unavailable, the smoke should skip live OV checks safely. If OV is available, memory extraction must be verified through the background task result, not just accepted.

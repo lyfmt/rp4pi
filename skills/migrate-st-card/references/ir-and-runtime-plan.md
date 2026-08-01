@@ -2,7 +2,8 @@
 
 ## Card IR
 
-Create `worlds/<slug>/migration/card-ir.json` before editing runtime files. The exact JSON shape may vary, but these blocks must be present or explicitly marked not applicable:
+`worlds/<slug>/migration/card-ir.json` is an optional, free-form working artifact.
+Use any structure that helps the migration. The following shape is only an example:
 
 ```json
 {
@@ -23,11 +24,14 @@ Create `worlds/<slug>/migration/card-ir.json` before editing runtime files. The 
 }
 ```
 
-A worked example built from the synthetic fixture card (`test/fixtures/st-cards/sample-card-v2.png`) lives at `references/example-card-ir.json`; it also shows how to mark empty blocks as explicitly not applicable.
+A worked example built from the synthetic fixture card
+(`test/fixtures/st-cards/sample-card-v2.png`) lives at
+`references/example-card-ir.json`. It illustrates one level of detail, not a required schema.
 
 ## Mutable Concepts
 
-Do not copy variable names as state fields by default. Name the domain concept first.
+It can be useful to name the domain concept before choosing whether to preserve a
+source variable as state.
 
 | ST Signal | Domain Concept | Likely Home |
 |---|---|---|
@@ -37,20 +41,20 @@ Do not copy variable names as state fields by default. Name the domain concept f
 | inventory, equipment | inventory | acquired/current possessions need state (attributes or a System module); fixed item catalog belongs in lore; remembered mentions may use memory |
 | time, location, scene | scene-turn | built-in `time`, `player.location`, `scene.summary` |
 | route, quest, chapter | quest/route | attribute, hook, prompt setup, or implementation plan |
-| secret identity, culprit, hidden motive | secret | hidden prompt/subagent boundary; never public memory |
+| secret identity, culprit, hidden motive | secret | hidden prompt/subagent boundary or omission from public memory |
 | faction plan, NPC autonomy | offscreen | hooks, role/tool subagents, memory |
 
-Each mutable concept needs:
+Useful notes for a mutable concept can include:
 
 - initial source;
 - change trigger;
 - legal change path;
 - visibility layer;
-- validation or discard reason.
+- adaptation or omission notes.
 
 ## Visibility Layers
 
-Use four layers:
+One possible visibility vocabulary uses four layers:
 
 | Layer | Meaning | Project Handling |
 |---|---|---|
@@ -59,11 +63,12 @@ Use four layers:
 | `scene-public` | Others in the scene can know | public prompt/state/memory |
 | `hidden-canonical` | True but unrevealed | private GM/module notes or subagent context only |
 
-Hidden-canonical facts do not belong in writer-visible prose packets unless they have been revealed through play.
+Hidden-canonical facts can remain outside writer-visible prose packets until they
+are revealed through play.
 
 ## Runtime Plan
 
-Create `worlds/<slug>/migration/runtime-plan.md` with these sections:
+`worlds/<slug>/migration/runtime-plan.md` is also optional. A useful outline can include:
 
 ```text
 Premise
@@ -79,10 +84,9 @@ Hooks
 Tools or implementation gaps
 Subagent roles
 Visibility policy
-Validation plan
 ```
 
-## Complexity Decision
+## Possible Complexity Mapping
 
 | Condition | Decision |
 |---|---|
@@ -92,16 +96,8 @@ Validation plan
 | Long-term character/event recall | OpenViking memory schemas |
 | Persistent named character voice | role subagent |
 | New character generation during play | tool subagent with base-platform `forge_role`, or a world-local extension like border-station's `forge_character` |
-| Complex formulas, combat, economy, inventory, quest ledger, secret ledger | world-local System module (`worlds/<slug>/systems/*.ts` with `defineSystem()`, advanced via `commit_turn`); a `src/` implementation plan only when a capability the System contract lacks is required |
+| Complex formulas, combat, economy, inventory, quest ledger, secret ledger | world-local System module (`worlds/<slug>/systems/*.ts` with `defineSystem()`, advanced via `commit_turn`) or source implementation |
 
-Do not mark a complex mechanic complete just because it appears in GM instructions. If the system must be queried reliably or audited later, it needs state-backed support.
-
-## Runtime Plan Gate
-
-Before building:
-
-- every IR mutable concept has a home or discard reason;
-- every hidden fact has a non-public handling rule;
-- every opening has a setup route;
-- every script finding is either discarded as ST shell or mapped to project work;
-- every module selected has a concrete file target in `worlds/<slug>/`.
+State-backed support is available when a mechanic benefits from reliable queries,
+auditable transitions, or persistence. Simpler adaptations may stay in prompts or
+omit the mechanic entirely.

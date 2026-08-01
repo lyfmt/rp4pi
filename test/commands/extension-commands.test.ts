@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -47,13 +47,78 @@ test("extension commands register with the real Pi command API shape (name + han
 
     assert.deepEqual(
       commands.map((command) => command.name).sort(),
-      ["load", "roll", "save", "status"]
+      ["load", "roll", "rpconfig", "save", "status"]
     );
     assert.equal(commands.every((command) => typeof command.handler === "function"), true);
     assert.equal(commands.every((command) => typeof command.description === "string"), true);
   } finally {
     if (previousSqlitePath === undefined) delete process.env.RP_SQLITE_PATH;
     else process.env.RP_SQLITE_PATH = previousSqlitePath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("/rpconfig is wired through registerAllCommands with Pi model selection", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rp-extension-rpconfig-"));
+  const db = openRpDatabase(join(dir, "state.sqlite"));
+  try {
+    initializeSchema(db);
+    const stateStore = createStateStore(db);
+    mkdirSync(join(dir, ".pi", "agent"), { recursive: true });
+    writeFileSync(
+      join(dir, ".pi", "agent", "settings.json"),
+      `${JSON.stringify({
+        defaultProvider: "old-provider",
+        defaultModel: "old-model",
+        writer: { provider: "old-provider", model: "old-model", thinking: "high" }
+      }, null, 2)}\n`,
+      "utf8"
+    );
+
+    const commands: RegisteredCommand[] = [];
+    registerAllCommands(
+      {
+        on() {},
+        registerTool() {},
+        registerCommand(name, options) {
+          commands.push({ name, description: options.description, handler: options.handler });
+        },
+        sendMessage() {}
+      },
+      {
+        db,
+        stateStore,
+        projectRoot: dir,
+        getSubagents: () => [],
+        onSubagentsChanged() {}
+      }
+    );
+
+    const command = commands.find((candidate) => candidate.name === "rpconfig");
+    assert.ok(command);
+    await command.handler("", {
+      mode: "rpc",
+      sessionManager: { getSessionId: () => "session-rpconfig" },
+      modelRegistry: {
+        refresh() {},
+        getAvailable: () => [{ provider: "new-provider", id: "org/new-model" }]
+      },
+      ui: {
+        async select(_title: string, options: string[]) {
+          return options[0];
+        },
+        notify() {}
+      }
+    });
+
+    const settings = JSON.parse(readFileSync(join(dir, ".pi", "agent", "settings.json"), "utf8"));
+    assert.deepEqual(settings.writer, {
+      provider: "new-provider",
+      model: "org/new-model",
+      thinking: "high"
+    });
+  } finally {
+    db.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });

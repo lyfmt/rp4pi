@@ -156,7 +156,7 @@ test("command registry registers player commands", () => {
 
     assert.deepEqual(
       commands.map((command) => command.name).sort(),
-      ["load", "roll", "save", "status"]
+      ["load", "roll", "rpconfig", "save", "status"]
     );
   });
 });
